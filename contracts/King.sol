@@ -147,6 +147,7 @@ contract King {
     /// @param _account The receiver of $WUSD
     /// @param _amount The amount of $WUSD minted
     /// @return _amount True amount of $WUSD minted
+    // TODO fix minting amount bug
     function praise(
         address _reserve,
         address _account,
