@@ -46,6 +46,8 @@ contract King {
     mapping(address => Reserve) public reserves;
     mapping(address => Vesting) public vestings;
 
+    uint256 public freeReserve; // In WUSD
+
     event RegisteredReserve(
         address indexed reserve,
         uint256 index,
@@ -153,6 +155,9 @@ contract King {
         vesting.unlockPeriod = block.number + reserve.vestingPeriod;
         vesting.amount = _amount.mul(reserve.mintingInterestRate).div(10000);
 
+        // TODO test this
+        freeReserve += _amount.mul(reserve.burningTaxRate).div(10000);
+
         wusd.mint(_account, _amount);
         emit Praise(_reserve, _account, _amount);
 
@@ -245,7 +250,7 @@ contract King {
     /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
     /// @param _reserve The asset to be used (ERC20)
     /// @param _to The receiver
-    /// @param _amount The amount to withdraw
+    /// @param _amount The amount to withdrawn
     function withdrawReserve(
         address _reserve,
         address _to,
@@ -269,6 +274,27 @@ contract King {
             reserveERC20.transfer(_to, amount);
             emit WithdrawReserve(address(reserveERC20), _to, amount);
         }
+    }
+
+    /// @notice Withdraw a chosen amount of free reserve in the chosen reserve
+    /// @param _reserve The asset to be used (ERC20)
+    /// @param _to The receiver
+    /// @param _amount The amount to withdrawn (in WUSD)
+    /// @return assetWithdrawn The amount of asset withdrawn after the exchange rate
+    function withdrawFreeReserve(
+        address _reserve,
+        address _to,
+        uint256 _amount
+    ) public onlyCrown returns (uint256 assetWithdrawn) {
+        require(_amount <= freeReserve, 'King: max amount exceeded');
+        Reserve reserve = reserves[_reserve];
+        require(address(reserve.reserveOracle) != address(0), "King: reserve doesn't exists");
+        assetWithdrawn = reserve.reserveOracle.getExchangeRate(_amount);
+        IERC20(_reserve).transfer(_to, assetWithdrawn);
+    }
+
+    function withdrawAllFreeReserve(address _reserve, address _to) public onlyCrown returns (uint256 assetWithdrawn) {
+        assetWithdrawn = withdrawFreeReserve(_reserve, _to, freeReserve);
     }
 
     /// @notice Update the sWagmeKingdom address
