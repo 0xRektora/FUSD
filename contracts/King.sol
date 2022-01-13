@@ -361,7 +361,7 @@ contract King {
         bool _isReproveWhitelisted
     ) internal {
         // Check if it exists
-        if (_reserve.reserveOracle != address(0)) {
+        if (address(_reserve.reserveOracle) != address(0)) {
             // We'll act only if there was changes
             if (_reserve.isReproveWhitelisted != _isReproveWhitelisted) {
                 // We'll add or remove it from reserveReproveWhitelistAddresses based on the previous param
