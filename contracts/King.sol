@@ -288,4 +288,17 @@ contract King {
     function crownKing(address _newKing) public onlyCrown {
         crown = _newKing;
     }
+
+    /// @notice Transfer an ERC20 to the king
+    /// @param erc20 The address of the token to transfer
+    /// @param amount The amount to transfer
+    function salvage(address erc20, uint256 amount) public onlyCrown {
+        IERC20(erc20).transfer(crown, amount);
+    }
+
+    /// @notice Withdraw the native currency to the king
+    /// @param amount The amount to be withdrawn
+    function withdrawNative(uint256 amount) public onlyCrown {
+        crown.transfer(amount);
+    }
 }
