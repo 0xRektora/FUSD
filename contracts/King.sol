@@ -332,16 +332,22 @@ contract King {
     }
 
     /// @notice Transfer an ERC20 to the king
-    /// @param erc20 The address of the token to transfer
-    /// @param amount The amount to transfer
-    function salvage(address erc20, uint256 amount) public onlyCrown {
-        IERC20(erc20).transfer(crown, amount);
+    /// @param _erc20 The address of the token to transfer
+    /// @param _to The address of the receiver
+    /// @param _amount The amount to transfer
+    function salvage(
+        address _erc20,
+        address _to,
+        uint256 _amount
+    ) public onlyCrown {
+        IERC20(_erc20).transfer(_to, _amount);
     }
 
     /// @notice Withdraw the native currency to the king
-    /// @param amount The amount to be withdrawn
-    function withdrawNative(uint256 amount) public onlyCrown {
-        crown.transfer(amount);
+    /// @param _to The address of the receiver
+    /// @param _amount The amount to be withdrawn
+    function withdrawNative(address payable _to, uint256 _amount) public onlyCrown {
+        _to.transfer(_amount);
     }
 
     /// @dev Updated [[reserveReproveWhitelistAddresses]] when a reserve is updated or appended.
