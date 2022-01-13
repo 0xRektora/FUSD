@@ -30,6 +30,7 @@ contract King {
         uint256 vestingPeriod;
         IReserveOracle reserveOracle;
         bool disabled;
+        bool isReproveWhitelisted;
     }
 
     struct Vesting {
@@ -43,6 +44,7 @@ contract King {
     uint256 public sWagmeTaxRate; // In Bps
 
     address[] public reserveAddresses;
+    address[] public reserveReproveWhitelistAddresses; // Array of whitelisted reserve accepted in reprove()
     mapping(address => Reserve) public reserves;
     mapping(address => Vesting) public vestings;
 
@@ -56,7 +58,8 @@ contract King {
         uint128 burningTaxRate,
         uint256 vestingPeriod,
         address reserveOracle,
-        bool disabled
+        bool disabled,
+        bool isReproveWhitelisted // If this reserve can be used by users to reprove()
     );
     event Praise(address indexed reserve, address indexed to, uint256 amount);
     event Reprove(address indexed reserve, address indexed from, uint256 amount);
@@ -96,25 +99,34 @@ contract King {
     /// @param _vestingPeriod The period where the interests will unlock
     /// @param _reserveOracle The oracle that is used for the exchange rate
     /// @param _disabled Controls the ability to be able to mint or not with the given asset
+    // TODO tests
     function bless(
         address _reserve,
         uint128 _mintingInterestRate,
         uint128 _burningTaxRate,
         uint256 _vestingPeriod,
         address _reserveOracle,
-        bool _disabled
+        bool _disabled,
+        bool _isReproveWhitelisted
     ) public onlyCrown {
         require(_reserveOracle != address(0), 'King: Invalid oracle');
+
+        // Add or remove the reserve if needed from reserveReproveWhitelistAddresses
+
         Reserve storage reserve = reserves[_reserve];
+        updateReserveReproveWhitelistAddresses(reserve, _reserve, _isReproveWhitelisted);
         reserve.mintingInterestRate = _mintingInterestRate;
         reserve.burningTaxRate = _burningTaxRate;
         reserve.vestingPeriod = _vestingPeriod;
         reserve.reserveOracle = IReserveOracle(_reserveOracle);
         reserve.disabled = _disabled;
+        reserve.isReproveWhitelisted = _isReproveWhitelisted;
+
         // !\ Careful of gas cost /!\
         if (!doesReserveExists(_reserve)) {
             reserveAddresses.push(_reserve);
         }
+
         emit RegisteredReserve(
             _reserve,
             reserveAddresses.length - 1,
@@ -123,7 +135,8 @@ contract King {
             _burningTaxRate,
             _vestingPeriod,
             _reserveOracle,
-            _disabled
+            _disabled,
+            _isReproveWhitelisted
         );
     }
 
@@ -168,8 +181,10 @@ contract King {
     /// @param _reserve The reserve to exchange with
     /// @param _amount The amount of $WUSD to reprove
     /// @return toExchange The amount of chosen reserve exchanged
+    // TODO test isReproveWhitelisted require
     function reprove(address _reserve, uint256 _amount) public reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
+        require(reserve.isReproveWhitelisted, 'King: reserve not whitelisted for reproval');
         uint256 sWagmeTax = _amount.mul(sWagmeTaxRate).div(10000);
         toExchange = IReserveOracle(reserve.reserveOracle).getExchangeRate(_amount - sWagmeTax);
 
@@ -326,5 +341,45 @@ contract King {
     /// @param amount The amount to be withdrawn
     function withdrawNative(uint256 amount) public onlyCrown {
         crown.transfer(amount);
+    }
+
+    /// @dev Updated [[reserveReproveWhitelistAddresses]] when a reserve is updated or appended.
+    /// Changes occurs only if needed
+    /// @param _reserve The reserve being utilized
+    /// @param _reserveAddress The address of the reserve
+    /// @param _isReproveWhitelisted The most updated version of reserve.isReproveWhitelisted
+    function updateReserveReproveWhitelistAddresses(
+        Reserve _reserve,
+        address _reserveAddress,
+        bool _isReproveWhitelisted
+    ) internal {
+        // Check if it exists
+        if (_reserve.reserveOracle != address(0)) {
+            // We'll act only if there was changes
+            if (_reserve.isReproveWhitelisted != _isReproveWhitelisted) {
+                // We'll add or remove it from reserveReproveWhitelistAddresses based on the previous param
+                if (_isReproveWhitelisted) {
+                    // Added to the whitelist
+                    reserveReproveWhitelistAddresses.push(_reserveAddress);
+                } else {
+                    // Remove it from the whitelist
+                    // /!\ Gas cost /!\
+                    for (uint256 i = 0; i < reserveReproveWhitelistAddresses.length; i++) {
+                        if (reserveReproveWhitelistAddresses[i] == _reserveAddress) {
+                            // Get the last element in the removed element
+                            reserveReproveWhitelistAddresses[i] = reserveReproveWhitelistAddresses[
+                                reserveReproveWhitelistAddresses.length - 1
+                            ];
+                            reserveReproveWhitelistAddresses.pop();
+                        }
+                    }
+                }
+            }
+        } else {
+            // If the reserve is new, we'll add it to the whitelist only if it's whitelisted
+            if (_isReproveWhitelisted) {
+                reserveReproveWhitelistAddresses.push(_reserveAddress);
+            }
+        }
     }
 }
