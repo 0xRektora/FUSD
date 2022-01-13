@@ -303,7 +303,7 @@ contract King {
         uint256 _amount
     ) public onlyCrown returns (uint256 assetWithdrawn) {
         require(_amount <= freeReserve, 'King: max amount exceeded');
-        Reserve reserve = reserves[_reserve];
+        Reserve storage reserve = reserves[_reserve];
         require(address(reserve.reserveOracle) != address(0), "King: reserve doesn't exists");
         assetWithdrawn = reserve.reserveOracle.getExchangeRate(_amount);
         IERC20(_reserve).transfer(_to, assetWithdrawn);
@@ -350,7 +350,7 @@ contract King {
     /// @param _reserveAddress The address of the reserve
     /// @param _isReproveWhitelisted The most updated version of reserve.isReproveWhitelisted
     function updateReserveReproveWhitelistAddresses(
-        Reserve _reserve,
+        Reserve memory _reserve,
         address _reserveAddress,
         bool _isReproveWhitelisted
     ) internal {
