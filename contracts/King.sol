@@ -146,14 +146,14 @@ contract King {
     /// @param _reserve The asset to be used (ERC20)
     /// @param _account The receiver of $WUSD
     /// @param _amount The amount of $WUSD minted
-    /// @return _amount True amount of $WUSD minted
-    // TODO fix minting amount bug
+    /// @return totalMinted True amount of $WUSD minted
     function praise(
         address _reserve,
         address _account,
         uint256 _amount
-    ) public reserveExists(_reserve) returns (uint256) {
+    ) public reserveExists(_reserve) returns (uint256 totalMinted) {
         Reserve storage reserve = reserves[_reserve];
+        totalMinted += _amount;
 
         uint256 toExchange = reserve.reserveOracle.getExchangeRate(_amount);
 
@@ -162,7 +162,7 @@ contract King {
         Vesting storage vesting = vestings[_account];
         // If the vesting period is unlocked, add it to the total to be minted
         if (block.number >= vesting.unlockPeriod) {
-            _amount += vesting.amount;
+            totalMinted += vesting.amount;
             emit VestingRedeem(_account, vesting.amount);
         }
         // Reset the vesting params
@@ -172,10 +172,10 @@ contract King {
         // TODO test this
         freeReserve += _amount.mul(reserve.burningTaxRate).div(10000);
 
-        wusd.mint(_account, _amount);
-        emit Praise(_reserve, _account, _amount);
+        wusd.mint(_account, totalMinted);
+        emit Praise(_reserve, _account, totalMinted);
 
-        return _amount;
+        return totalMinted;
     }
 
     /// @notice Burn $WUSD in exchange of the desired reserve. A certain amount could be taxed and sent to sWagme
