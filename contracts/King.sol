@@ -120,7 +120,7 @@ contract King {
         address _reserveOracle,
         bool _disabled,
         bool _isReproveWhitelisted
-    ) public onlyCrown {
+    ) external onlyCrown {
         require(_reserveOracle != address(0), 'King: Invalid oracle');
 
         // Add or remove the reserve if needed from reserveReproveWhitelistAddresses
@@ -163,7 +163,7 @@ contract King {
         address _reserve,
         address _account,
         uint256 _amount
-    ) public reserveExists(_reserve) returns (uint256 totalMinted) {
+    ) external reserveExists(_reserve) returns (uint256 totalMinted) {
         Reserve storage reserve = reserves[_reserve];
         totalMinted += _amount;
 
@@ -195,7 +195,7 @@ contract King {
     /// @param _amount The amount of $WUSD to reprove
     /// @return toExchange The amount of chosen reserve exchanged
     // TODO test isReproveWhitelisted require
-    function reprove(address _reserve, uint256 _amount) public reserveExists(_reserve) returns (uint256 toExchange) {
+    function reprove(address _reserve, uint256 _amount) external reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
         require(reserve.isReproveWhitelisted, 'King: reserve not whitelisted for reproval');
         uint256 sWagmeTax = _amount.mul(sWagmeTaxRate).div(10000);
@@ -215,7 +215,7 @@ contract King {
     /// @dev Mint $WUSD and reset vesting terms
     /// @param _account The vesting account
     /// @return redeemed The amount of $WUSD redeemed
-    function redeemVesting(address _account) public returns (uint256 redeemed) {
+    function redeemVesting(address _account) external returns (uint256 redeemed) {
         Vesting storage vesting = vestings[_account];
         if (block.number >= vesting.unlockPeriod) {
             redeemed = vesting.amount;
@@ -238,7 +238,7 @@ contract King {
         address _account,
         uint256 _amount
     )
-        public
+        external
         view
         reserveExists(_reserve)
         returns (
@@ -283,7 +283,7 @@ contract King {
         address _reserve,
         address _to,
         uint256 _amount
-    ) public onlyCrown {
+    ) external onlyCrown {
         require(address(reserves[_reserve].reserveOracle) != address(0), "King: reserve doesn't exists");
         IERC20(_reserve).transfer(_to, _amount);
         emit WithdrawReserve(_reserve, _to, _amount);
@@ -295,7 +295,7 @@ contract King {
     /// - Ability to withdraw assets and break the burning mechanism.
     /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
     /// @param _to The receiver
-    function withdrawAll(address _to) public onlyCrown {
+    function withdrawAll(address _to) external onlyCrown {
         for (uint256 i = 0; i < reserveAddresses.length; i++) {
             IERC20 reserveERC20 = IERC20(reserveAddresses[i]);
             uint256 amount = reserveERC20.balanceOf(address(this));
@@ -321,25 +321,25 @@ contract King {
         IERC20(_reserve).transfer(_to, assetWithdrawn);
     }
 
-    function withdrawAllFreeReserve(address _reserve, address _to) public onlyCrown returns (uint256 assetWithdrawn) {
+    function withdrawAllFreeReserve(address _reserve, address _to) external onlyCrown returns (uint256 assetWithdrawn) {
         assetWithdrawn = withdrawFreeReserve(_reserve, _to, freeReserve);
     }
 
     /// @notice Update the sWagmeKingdom address
     /// @param _sWagmeKingdom The new address
-    function updateSWagmeKingdom(address _sWagmeKingdom) public onlyCrown {
+    function updateSWagmeKingdom(address _sWagmeKingdom) external onlyCrown {
         sWagmeKingdom = _sWagmeKingdom;
     }
 
     /// @notice Update the sWagmeTaxRate state var
     /// @param _sWagmeTaxRate The new tax rate
-    function updateSWagmeTaxRate(uint256 _sWagmeTaxRate) public onlyCrown {
+    function updateSWagmeTaxRate(uint256 _sWagmeTaxRate) external onlyCrown {
         sWagmeTaxRate = _sWagmeTaxRate;
     }
 
     /// @notice Update the owner
     /// @param _newKing of the new owner
-    function crownKing(address _newKing) public onlyCrown {
+    function crownKing(address _newKing) external onlyCrown {
         crown = _newKing;
     }
 
@@ -351,14 +351,14 @@ contract King {
         address _erc20,
         address _to,
         uint256 _amount
-    ) public onlyCrown {
+    ) external onlyCrown {
         IERC20(_erc20).transfer(_to, _amount);
     }
 
     /// @notice Withdraw the native currency to the king
     /// @param _to The address of the receiver
     /// @param _amount The amount to be withdrawn
-    function withdrawNative(address payable _to, uint256 _amount) public onlyCrown {
+    function withdrawNative(address payable _to, uint256 _amount) external onlyCrown {
         _to.transfer(_amount);
     }
 
