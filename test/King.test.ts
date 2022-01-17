@@ -36,8 +36,24 @@ const getAddresses = async () => {
   };
 };
 
-const addReserve = async (king: any, underlyingAddr: string, oracleAddr: string, disabled?: boolean) => {
-  await (await king.bless(underlyingAddr, 1000, 2000, 5, oracleAddr, disabled !== undefined ? disabled : false)).wait();
+const addReserve = async (
+  king: any,
+  underlyingAddr: string,
+  oracleAddr: string,
+  disabled?: boolean,
+  isReproveWhitelisted?: boolean,
+) => {
+  await (
+    await king.bless(
+      underlyingAddr,
+      1000,
+      2000,
+      5,
+      oracleAddr,
+      disabled !== undefined ? disabled : false,
+      isReproveWhitelisted !== undefined ? isReproveWhitelisted : true,
+    )
+  ).wait();
 };
 
 const mine = async (blocks: number) => {
@@ -53,11 +69,11 @@ describe('King', () => {
 
       // Only crown can execute
       await expect(
-        king.connect(eoa1).bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false),
+        king.connect(eoa1).bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true),
       ).to.be.revertedWith('King: Only crown can execute');
 
       // Event emitted
-      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false))
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true))
         .to.emit(king, 'RegisteredReserve')
         .withArgs(
           mockERC20.address,
@@ -68,6 +84,7 @@ describe('King', () => {
           5,
           usdtOracle.address,
           false,
+          true,
         );
 
       // reserveAddresses array pushed oracle
@@ -77,6 +94,36 @@ describe('King', () => {
       expect((await king.reserves(mockERC20.address)).reserveOracle).to.equal(usdtOracle.address);
       // Check if the reserve has been correctly added to the array
       expect(await king.doesReserveExists(mockERC20.address)).to.equal(true);
+    });
+    it('Should update reserveReproveWhitelistAddresses when updating reserve', async () => {
+      const { king, mockERC20, usdtOracle } = await getAddresses();
+
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true))
+        .to.emit(king, 'UpdateReserveReproveWhitelistAddresses')
+        // Whitelist added and created
+        .withArgs(mockERC20.address, true, true);
+      expect(await king.reserveReproveWhitelistAddresses(0)).to.equal(mockERC20.address);
+      expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(true);
+
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false))
+        .to.emit(king, 'UpdateReserveReproveWhitelistAddresses')
+        // Whitelist updated to false
+        .withArgs(mockERC20.address, false, false);
+      expect(await king.reserveReproveWhitelistAddressesLength()).to.equal(ethers.BigNumber.from(0));
+      expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(false);
+
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false))
+        // Whitelist updated to false (no change happens)
+        .to.not.emit(king, 'UpdateReserveReproveWhitelistAddresses');
+      expect(await king.reserveReproveWhitelistAddressesLength()).to.equal(ethers.BigNumber.from(0));
+      expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(false);
+
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true))
+        .to.emit(king, 'UpdateReserveReproveWhitelistAddresses')
+        // Whitelist updated to true
+        .withArgs(mockERC20.address, true, false);
+      expect(await king.reserveReproveWhitelistAddresses(0)).to.equal(mockERC20.address);
+      expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(true);
     });
   });
 
@@ -253,6 +300,12 @@ describe('King', () => {
     });
   });
 
+  describe('withdrawFreeReserve', () => {
+    it('Should withdraw only the specified freeReserve', async () => {
+      throw 'Not implemented';
+    });
+  });
+
   describe('withdrawReserve', () => {
     it('Should only let the crown execute', async () => {
       const { deployer, king, mockERC20, usdtOracle, eoa1 } = await getAddresses();
@@ -313,6 +366,10 @@ describe('King', () => {
       await addReserve(king, mockERC20.address, usdtOracle.address, true);
 
       await expect(king.withdrawReserve(mockERC20.address, eoa1.address, underlyingExchanged)).to.not.be.reverted;
+    });
+
+    it('Should reest all freeReserve upon withdrawal', async () => {
+      throw 'Not implemented';
     });
   });
 

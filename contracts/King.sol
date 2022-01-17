@@ -112,7 +112,6 @@ contract King {
     /// @param _vestingPeriod The period where the interests will unlock
     /// @param _reserveOracle The oracle that is used for the exchange rate
     /// @param _disabled Controls the ability to be able to mint or not with the given asset
-    // TODO tests
     function bless(
         address _reserve,
         uint128 _mintingInterestRate,
