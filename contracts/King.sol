@@ -13,7 +13,7 @@ interface IReserveOracle {
 }
 
 /// @title King contract. Mint/Burn $WUSD against chosen assets
-/// @author 0xRektora
+/// @author 0xRektora (https://github.com/0xRektora)
 /// @notice Crown has the ability to add and disable reserve, which can be any ERC20 (stable/LP) given an oracle
 /// that compute the exchange rates between $WUSD and the latter.
 /// @dev Potential flaw of this tokenomics:
@@ -65,6 +65,7 @@ contract King {
     event Reprove(address indexed reserve, address indexed from, uint256 amount);
     event VestingRedeem(address indexed to, uint256 amount);
     event WithdrawReserve(address indexed reserve, address indexed to, uint256 amount);
+    event UpdateReserveReproveWhitelistAddresses(address indexed reserve, bool newVal, bool created);
 
     modifier onlyCrown() {
         require(msg.sender == crown, 'King: Only crown can execute');
@@ -114,7 +115,7 @@ contract King {
         // Add or remove the reserve if needed from reserveReproveWhitelistAddresses
 
         Reserve storage reserve = reserves[_reserve];
-        updateReserveReproveWhitelistAddresses(reserve, _reserve, _isReproveWhitelisted);
+        _updateReserveReproveWhitelistAddresses(reserve, _reserve, _isReproveWhitelisted);
         reserve.mintingInterestRate = _mintingInterestRate;
         reserve.burningTaxRate = _burningTaxRate;
         reserve.vestingPeriod = _vestingPeriod;
@@ -351,11 +352,11 @@ contract King {
     }
 
     /// @dev Updated [[reserveReproveWhitelistAddresses]] when a reserve is updated or appended.
-    /// Changes occurs only if needed
+    /// Changes occurs only if needed. It is designed to be called only at the begining of a blessing [[bless()]]
     /// @param _reserve The reserve being utilized
     /// @param _reserveAddress The address of the reserve
     /// @param _isReproveWhitelisted The most updated version of reserve.isReproveWhitelisted
-    function updateReserveReproveWhitelistAddresses(
+    function _updateReserveReproveWhitelistAddresses(
         Reserve memory _reserve,
         address _reserveAddress,
         bool _isReproveWhitelisted
@@ -368,6 +369,7 @@ contract King {
                 if (_isReproveWhitelisted) {
                     // Added to the whitelist
                     reserveReproveWhitelistAddresses.push(_reserveAddress);
+                    emit UpdateReserveReproveWhitelistAddresses(_reserveAddress, true, false);
                 } else {
                     // Remove it from the whitelist
                     // /!\ Gas cost /!\
@@ -378,6 +380,7 @@ contract King {
                                 reserveReproveWhitelistAddresses.length - 1
                             ];
                             reserveReproveWhitelistAddresses.pop();
+                            emit UpdateReserveReproveWhitelistAddresses(_reserveAddress, false, false);
                         }
                     }
                 }
@@ -386,6 +389,7 @@ contract King {
             // If the reserve is new, we'll add it to the whitelist only if it's whitelisted
             if (_isReproveWhitelisted) {
                 reserveReproveWhitelistAddresses.push(_reserveAddress);
+                emit UpdateReserveReproveWhitelistAddresses(_reserveAddress, true, true);
             }
         }
     }
