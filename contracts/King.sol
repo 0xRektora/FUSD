@@ -90,6 +90,18 @@ contract King {
         sWagmeTaxRate = _sWagmeTaxRate;
     }
 
+    /// @notice Returns the total number of reserves
+    /// @return Length of [[reserveAddresses]]
+    function reserveAddressesLength() external view returns (uint256) {
+        return reserveAddresses.length;
+    }
+
+    /// @notice Returns the total number of whitelisted reserves for [[reprove()]]
+    /// @return Length of [[reserveReproveWhitelistAddresses]]
+    function reserveReproveWhitelistAddressesLength() external view returns (uint256) {
+        return reserveReproveWhitelistAddresses.length;
+    }
+
     /// @notice Use this function to create/change parameters of a given reserve
     /// @dev We inline assign each state to save gas instead of using Struct constructor
     /// @dev Potential flaw of this tokenomics:
