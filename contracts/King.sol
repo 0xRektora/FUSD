@@ -273,6 +273,34 @@ contract King {
         }
     }
 
+    /// @notice Get the conversion of $FUSD -> [[_reserve]]
+    /// @param _reserve The output valuation
+    /// @param _amount The amount of $FUSD to value
+    /// @return The [[_reserve]] valuation for the given $FUSD
+    // TODO test
+    function conversionRateFUSDToReserve(address _reserve, uint256 _amount)
+        external
+        view
+        reserveExists(_reserve)
+        returns (uint256)
+    {
+        return reserves[_reserve].reserveOracle.getExchangeRate(_amount);
+    }
+
+    /// @notice Get the conversion of [[_reserve]] -> $FUSD
+    /// @param _reserve The input valuation
+    /// @param _amount The amount of [[_reserve]] to value
+    /// @return The $FUSD valuation for the given [[_reserve]]
+    // TODO test
+    function conversionRateReserveToFUSD(address _reserve, uint256 _amount)
+        external
+        view
+        reserveExists(_reserve)
+        returns (uint256)
+    {
+        return _amount.div(reserves[_reserve].reserveOracle.getExchangeRate(1));
+    }
+
     /// @notice Withdraw [[_to]] a given [[_amount]] of [[_reserve]] and reset its freeReserves
     /// @dev Potential flaw of this tokenomics:
     /// - Ability to withdraw assets and break the burning mechanism.
