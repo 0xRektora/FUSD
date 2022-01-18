@@ -350,7 +350,6 @@ contract King {
     ) public onlyCrown returns (uint256 assetWithdrawn) {
         require(_amount <= freeReserves[_reserve], 'King: max amount exceeded');
         Reserve storage reserve = reserves[_reserve];
-        require(address(reserve.reserveOracle) != address(0), "King: reserve doesn't exists");
         assetWithdrawn = reserve.reserveOracle.getExchangeRate(_amount);
         freeReserves[_reserve] -= _amount;
         IERC20(_reserve).transfer(_to, assetWithdrawn);
