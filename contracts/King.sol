@@ -182,7 +182,6 @@ contract King {
         vesting.unlockPeriod = block.number + reserve.vestingPeriod;
         vesting.amount = _amount.mul(reserve.mintingInterestRate).div(10000);
 
-        // TODO test this
         freeReserves[_reserve] += _amount.mul(reserve.burningTaxRate).div(10000);
 
         wusd.mint(_account, totalMinted);
@@ -308,7 +307,6 @@ contract King {
     /// @param _reserve The asset to be used (ERC20)
     /// @param _to The receiver
     /// @param _amount The amount to withdrawn
-    // TODO test freeReserve
     function withdrawReserve(
         address _reserve,
         address _to,
@@ -327,7 +325,6 @@ contract King {
     /// - Ability to withdraw assets and break the burning mechanism.
     /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
     /// @param _to The receiver
-    // TODO test freeReserve
     function withdrawAll(address _to) external onlyCrown {
         for (uint256 i = 0; i < reserveAddresses.length; i++) {
             IERC20 reserveERC20 = IERC20(reserveAddresses[i]);

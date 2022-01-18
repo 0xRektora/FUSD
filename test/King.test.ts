@@ -19,6 +19,7 @@ const getAddresses = async () => {
   await (await wusd.claimCrown(king.address)).wait();
 
   const mockERC20 = await (await ethers.getContractFactory('MockERC20')).deploy(ethers.utils.parseEther('10'));
+  const mockERC20_2 = await (await ethers.getContractFactory('MockERC20')).deploy(ethers.utils.parseEther('10'));
 
   const usdtOracle = await (await ethers.getContractFactory('KingReserveUSDTOracle')).deploy();
 
@@ -30,6 +31,7 @@ const getAddresses = async () => {
     king,
     wusd,
     mockERC20,
+    mockERC20_2,
     usdtOracle,
     eoa1,
     sWagmeKingdom,
@@ -202,6 +204,24 @@ describe('King', () => {
       expect(await wusd.balanceOf(deployer.address)).to.equal(mintAmount);
     });
 
+    it('Should add the burningTax of the reserve into its freeReserve', async () => {
+      const { deployer, king, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const expectedFreeReserveAddedInFUSD = mintAmount
+        .mul((await king.reserves(mockERC20.address)).burningTaxRate)
+        .div(10000);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged.mul(2))).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      expect(await king.freeReserves(mockERC20.address)).to.be.equal(expectedFreeReserveAddedInFUSD);
+
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      expect(await king.freeReserves(mockERC20.address)).to.be.equal(expectedFreeReserveAddedInFUSD.mul(2));
+    });
+
     it('Should vest 10% and redeem them after 5 blocks ', async () => {
       const { deployer, king, wusd, mockERC20, usdtOracle, eoa1 } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address);
@@ -301,8 +321,57 @@ describe('King', () => {
   });
 
   describe('withdrawFreeReserve', () => {
+    it('Should be called only by crown', async () => {
+      const { deployer, king, mockERC20, mockERC20_2, usdtOracle, eoa1 } = await getAddresses();
+
+      await expect(
+        king.connect(eoa1).withdrawFreeReserve(mockERC20.address, eoa1.address, ethers.utils.parseEther('1')),
+      ).to.be.revertedWith('King: Only crown can execute');
+    });
+
+    it('Should revert if freeReserve exceeded', async () => {
+      const { deployer, king, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+
+      await expect(king.withdrawFreeReserve(mockERC20.address, eoa1.address, mintAmount)).to.be.revertedWith(
+        'King: max amount exceeded',
+      );
+    });
+
     it('Should withdraw only the specified freeReserve', async () => {
-      throw 'Not implemented';
+      const { deployer, king, mockERC20, mockERC20_2, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+      await addReserve(king, mockERC20_2.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const expectedFreeReserveAddedInFUSD = mintAmount
+        .mul((await king.reserves(mockERC20.address)).burningTaxRate)
+        .div(10000);
+      const expectedFreeReserveWithdrawn = await king.conversionRateFUSDToReserve(
+        mockERC20.address,
+        expectedFreeReserveAddedInFUSD,
+      );
+
+      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
+      await (await mockERC20_2.approve(king.address, underlyingExchanged)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await king.praise(mockERC20_2.address, deployer.address, mintAmount)).wait();
+
+      await expect(king.withdrawFreeReserve(mockERC20.address, eoa1.address, expectedFreeReserveAddedInFUSD)).to.not.be
+        .reverted;
+
+      expect(await mockERC20.balanceOf(eoa1.address)).to.be.equal(expectedFreeReserveWithdrawn);
+      expect(await mockERC20_2.balanceOf(eoa1.address)).to.be.equal(ethers.BigNumber.from(0));
+
+      expect(await king.freeReserves(mockERC20.address)).to.be.equal(ethers.BigNumber.from(0));
+      expect(await king.freeReserves(mockERC20_2.address)).to.be.equal(expectedFreeReserveAddedInFUSD);
     });
   });
 
@@ -349,6 +418,7 @@ describe('King', () => {
         .and.to.emit(king, 'WithdrawReserve')
         .withArgs(mockERC20.address, eoa1.address, underlyingExchanged);
 
+      expect(await king.freeReserves(mockERC20.address)).to.be.equal(ethers.BigNumber.from(0));
       expect(await mockERC20.balanceOf(eoa1.address)).to.be.equal(underlyingExchanged);
     });
 
@@ -368,8 +438,26 @@ describe('King', () => {
       await expect(king.withdrawReserve(mockERC20.address, eoa1.address, underlyingExchanged)).to.not.be.reverted;
     });
 
-    it('Should reest all freeReserve upon withdrawal', async () => {
-      throw 'Not implemented';
+    it('Should reset freeReserve upon withdrawal', async () => {
+      const { deployer, king, mockERC20, mockERC20_2, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+      await addReserve(king, mockERC20_2.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const expectedFreeReserveAddedInFUSD = mintAmount
+        .mul((await king.reserves(mockERC20.address)).burningTaxRate)
+        .div(10000);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
+      await (await mockERC20_2.approve(king.address, underlyingExchanged)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await king.praise(mockERC20_2.address, deployer.address, mintAmount)).wait();
+
+      await (await king.withdrawReserve(mockERC20.address, eoa1.address, underlyingExchanged)).wait();
+
+      expect(await king.freeReserves(mockERC20.address)).to.be.equal(ethers.BigNumber.from(0));
+      expect(await king.freeReserves(mockERC20_2.address)).to.be.equal(expectedFreeReserveAddedInFUSD);
     });
   });
 
@@ -401,12 +489,9 @@ describe('King', () => {
     });
 
     it('Should withdraw 2.2 $MockERC20 to eoa1', async () => {
-      const { deployer, king, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+      const { deployer, king, mockERC20, mockERC20_2, usdtOracle, eoa1 } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address);
-
-      const mockERC20_2 = await (await ethers.getContractFactory('MockERC20')).deploy(ethers.utils.parseEther('10'));
-      const usdtOracle2 = await (await ethers.getContractFactory('KingReserveUSDTOracle')).deploy();
-      await addReserve(king, mockERC20_2.address, usdtOracle2.address);
+      await addReserve(king, mockERC20_2.address, usdtOracle.address);
 
       const mintAmount = ethers.utils.parseEther('1');
       const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
@@ -445,6 +530,25 @@ describe('King', () => {
       await addReserve(king, mockERC20.address, usdtOracle.address, true);
 
       await expect(king.withdrawAll(eoa1.address)).to.not.be.reverted;
+    });
+
+    it('Should reset all freeReserve upon withdrawal', async () => {
+      const { deployer, king, mockERC20, mockERC20_2, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+      await addReserve(king, mockERC20_2.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
+      await (await mockERC20_2.approve(king.address, underlyingExchanged)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await king.praise(mockERC20_2.address, deployer.address, mintAmount)).wait();
+
+      await (await king.withdrawAll(eoa1.address)).wait();
+
+      expect(await king.freeReserves(mockERC20.address)).to.be.equal(ethers.BigNumber.from(0));
+      expect(await king.freeReserves(mockERC20_2.address)).to.be.equal(ethers.BigNumber.from(0));
     });
   });
 
