@@ -20,6 +20,7 @@ interface IReserveOracle {
 /// - Ability to withdraw assets and break the burning mechanism.
 /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
 // TODO update vesting system
+// TODO rename WUSD to FUSD
 contract King {
     struct Reserve {
         uint128 mintingInterestRate; // In Bps
@@ -43,7 +44,7 @@ contract King {
     address[] public reserveAddresses;
     address[] public reserveReproveWhitelistAddresses; // Array of whitelisted reserve accepted in reprove()
     mapping(address => Reserve) public reserves;
-    mapping(address => Vesting) public vestings;
+    mapping(address => Vesting[]) public vestings;
 
     mapping(address => uint256) public freeReserves; // In WUSD
 
@@ -58,7 +59,8 @@ contract King {
         bool disabled,
         bool isReproveWhitelisted // If this reserve can be used by users to reprove()
     );
-    event Praise(address indexed reserve, address indexed to, uint256 amount);
+    // TODO update praise test
+    event Praise(address indexed reserve, address indexed to, uint256 amount, Vesting vesting);
     event Reprove(address indexed reserve, address indexed from, uint256 amount);
     event VestingRedeem(address indexed to, uint256 amount);
     event WithdrawReserve(address indexed reserve, address indexed to, uint256 amount);
@@ -151,11 +153,12 @@ contract King {
 
     /// @notice Mint a given [[_amount]] of $WUSD using [[_reserve]] asset to an [[_account]]
     /// @dev Compute and send to the King the amount of [[_reserve]] in exchange of $WUSD.
-    /// The $WUSD minted takes in consideration vestings
     /// @param _reserve The asset to be used (ERC20)
     /// @param _account The receiver of $WUSD
     /// @param _amount The amount of $WUSD minted
     /// @return totalMinted True amount of $WUSD minted
+    // TODO update praise test to substract vesting from total minted
+    // TODO test vestings array add new entry
     function praise(
         address _reserve,
         address _account,
@@ -168,20 +171,18 @@ contract King {
 
         IERC20(_reserve).transferFrom(msg.sender, address(this), toExchange);
 
-        Vesting storage vesting = vestings[_account];
-        // If the vesting period is unlocked, add it to the total to be minted
-        if (block.number >= vesting.unlockPeriod) {
-            totalMinted += vesting.amount;
-            emit VestingRedeem(_account, vesting.amount);
-        }
-        // Reset the vesting params
-        vesting.unlockPeriod = block.number + reserve.vestingPeriod;
-        vesting.amount = (_amount * reserve.mintingInterestRate) / 10000;
-
         freeReserves[_reserve] += (_amount * reserve.burningTaxRate) / 10000;
 
+        Vesting[] storage accountVestings = vestings[_account];
+        Vesting memory vesting;
+        vesting.unlockPeriod = block.number + reserve.vestingPeriod;
+        vesting.amount = (_amount * reserve.mintingInterestRate) / 10000;
+        accountVestings.push(vesting);
+
+        totalMinted -= vesting.amount;
+
         wusd.mint(_account, totalMinted);
-        emit Praise(_reserve, _account, totalMinted);
+        emit Praise(_reserve, _account, totalMinted, vesting);
 
         return totalMinted;
     }
@@ -210,29 +211,31 @@ contract King {
     /// @dev Mint $WUSD and reset vesting terms
     /// @param _account The vesting account
     /// @return redeemed The amount of $WUSD redeemed
-    function redeemVesting(address _account) external returns (uint256 redeemed) {
-        Vesting storage vesting = vestings[_account];
-        if (block.number >= vesting.unlockPeriod) {
-            redeemed = vesting.amount;
-            vesting.amount = 0;
+    // TODO test vesting removal after redeem
+    function redeemVestings(address _account) external returns (uint256 redeemed) {
+        Vesting[] storage accountVestings = vestings[_account];
+        for (uint256 i; i < accountVestings.length; i++) {
+            if (block.number >= accountVestings[i].unlockPeriod) {
+                redeemed += accountVestings[i].amount;
+                // We remove the vesting when redeemed
+                accountVestings[i] = accountVestings[accountVestings.length - 1];
+                accountVestings.pop();
+            }
+        }
+        if (redeemed > 0) {
             wusd.mint(_account, redeemed);
             emit VestingRedeem(_account, redeemed);
         }
     }
 
     /// @notice Useful for frontend. Get an estimate exchange of $WUSD vs desired reserve.
-    /// takes in account any vested amount
     /// @param _reserve The asset to be used (ERC20)
-    /// @param _account The receiver of $WUSD
     /// @param _amount The amount of $WUSD to mint
     /// @return toExchange Amount of reserve to exchange,
     /// @return amount True amount of $WUSD to be exchanged
     /// @return vested Any vesting created
-    function getPraiseEstimates(
-        address _reserve,
-        address _account,
-        uint256 _amount
-    )
+    // TODO test substract vesting from amount
+    function getPraiseEstimates(address _reserve, uint256 _amount)
         external
         view
         reserveExists(_reserve)
@@ -243,15 +246,10 @@ contract King {
         )
     {
         Reserve storage reserve = reserves[_reserve];
-        Vesting storage vesting = vestings[_account];
 
         toExchange = reserve.reserveOracle.getExchangeRate(_amount);
-        // If there vesting period is unlocked, add it to the total minted
-        if (block.number >= vesting.unlockPeriod) {
-            _amount += vesting.amount;
-        }
         vested = (_amount * reserve.mintingInterestRate) / 10000;
-        amount = _amount;
+        amount = _amount - vested;
     }
 
     /// @notice Check if a reserve was created
