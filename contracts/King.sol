@@ -324,7 +324,7 @@ contract King {
         Reserve storage reserve = reserves[_reserve];
         require(address(reserve.reserveOracle) != address(0), "King: reserve doesn't exists");
         assetWithdrawn = reserve.reserveOracle.getExchangeRate(_amount);
-        freeReserves[_reserve] -= assetWithdrawn;
+        freeReserves[_reserve] -= _amount;
         IERC20(_reserve).transfer(_to, assetWithdrawn);
     }
 
