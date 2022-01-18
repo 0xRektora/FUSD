@@ -20,6 +20,7 @@ interface IReserveOracle {
 /// - Ability for the crown to change freely reserve parameters. (suggestion: immutable reserve/reserve parameter)
 /// - Ability to withdraw assets and break the burning mechanism.
 /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
+// TODO update vesting system
 contract King {
     using PRBMathUD60x18 for uint256;
     using PRBMathUD60x18 for uint128;
@@ -48,7 +49,7 @@ contract King {
     mapping(address => Reserve) public reserves;
     mapping(address => Vesting) public vestings;
 
-    uint256 public freeReserve; // In WUSD
+    mapping(address => uint256) public freeReserves; // In WUSD
 
     event RegisteredReserve(
         address indexed reserve,
@@ -182,7 +183,7 @@ contract King {
         vesting.amount = _amount.mul(reserve.mintingInterestRate).div(10000);
 
         // TODO test this
-        freeReserve += _amount.mul(reserve.burningTaxRate).div(10000);
+        freeReserves[_reserve] += _amount.mul(reserve.burningTaxRate).div(10000);
 
         wusd.mint(_account, totalMinted);
         emit Praise(_reserve, _account, totalMinted);
@@ -272,13 +273,14 @@ contract King {
         }
     }
 
-    /// @notice Withdraw [[_to]] a given [[_amount]] of [[_reserve]]
+    /// @notice Withdraw [[_to]] a given [[_amount]] of [[_reserve]] and reset its freeReserves
     /// @dev Potential flaw of this tokenomics:
     /// - Ability to withdraw assets and break the burning mechanism.
     /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
     /// @param _reserve The asset to be used (ERC20)
     /// @param _to The receiver
     /// @param _amount The amount to withdrawn
+    // TODO test freeReserve
     function withdrawReserve(
         address _reserve,
         address _to,
@@ -286,20 +288,24 @@ contract King {
     ) external onlyCrown {
         require(address(reserves[_reserve].reserveOracle) != address(0), "King: reserve doesn't exists");
         IERC20(_reserve).transfer(_to, _amount);
+        // Based on specs, reset behavior is wanted
+        freeReserves[_reserve] = 0; // Reset freeReserve
         emit WithdrawReserve(_reserve, _to, _amount);
     }
 
-    /// @notice Drain every reserve [[_to]]
+    /// @notice Drain every reserve [[_to]] and reset all freeReserves
     /// @dev /!\ Careful of gas cost /!\
     /// @dev Potential flaw of this tokenomics:
     /// - Ability to withdraw assets and break the burning mechanism.
     /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
     /// @param _to The receiver
+    // TODO test freeReserve
     function withdrawAll(address _to) external onlyCrown {
         for (uint256 i = 0; i < reserveAddresses.length; i++) {
             IERC20 reserveERC20 = IERC20(reserveAddresses[i]);
             uint256 amount = reserveERC20.balanceOf(address(this));
             reserveERC20.transfer(_to, amount);
+            freeReserves[reserveAddresses[i]] = 0; // Reset freeReserve
             emit WithdrawReserve(address(reserveERC20), _to, amount);
         }
     }
@@ -314,15 +320,16 @@ contract King {
         address _to,
         uint256 _amount
     ) public onlyCrown returns (uint256 assetWithdrawn) {
-        require(_amount <= freeReserve, 'King: max amount exceeded');
+        require(_amount <= freeReserves[_reserve], 'King: max amount exceeded');
         Reserve storage reserve = reserves[_reserve];
         require(address(reserve.reserveOracle) != address(0), "King: reserve doesn't exists");
         assetWithdrawn = reserve.reserveOracle.getExchangeRate(_amount);
+        freeReserves[_reserve] -= assetWithdrawn;
         IERC20(_reserve).transfer(_to, assetWithdrawn);
     }
 
     function withdrawAllFreeReserve(address _reserve, address _to) external onlyCrown returns (uint256 assetWithdrawn) {
-        assetWithdrawn = withdrawFreeReserve(_reserve, _to, freeReserve);
+        assetWithdrawn = withdrawFreeReserve(_reserve, _to, freeReserves[_reserve]);
     }
 
     /// @notice Update the sWagmeKingdom address
