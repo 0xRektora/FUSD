@@ -552,6 +552,42 @@ describe('King', () => {
     });
   });
 
+  describe('conversionRateFUSDToReserve', () => {
+    it("Should fail if the reserve doesn't exist", async () => {
+      const { king, mockERC20 } = await getAddresses();
+
+      await expect(king.conversionRateFUSDToReserve(mockERC20.address, 1)).to.be.revertedWith(
+        "King: reserve doesn't exists",
+      );
+    });
+
+    it('Should output the correct amount', async () => {
+      const { king, mockERC20, usdtOracle } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      expect(await king.conversionRateFUSDToReserve(mockERC20.address, 1)).to.be.equal(
+        await usdtOracle.getExchangeRate(1),
+      );
+    });
+  });
+
+  describe('conversionRateReserveToFUSD', () => {
+    it("Should fail if the reserve doesn't exist", async () => {
+      const { king, mockERC20 } = await getAddresses();
+
+      await expect(king.conversionRateReserveToFUSD(mockERC20.address, 1)).to.be.revertedWith(
+        "King: reserve doesn't exists",
+      );
+    });
+
+    it('Should output the correct amount', async () => {
+      const { king, mockERC20, usdtOracle } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      expect(await king.conversionRateReserveToFUSD(mockERC20.address, 11)).to.be.equal(ethers.BigNumber.from(10));
+    });
+  });
+
   describe('crownKing', () => {
     it('Crown can be changed only by the current crown', async () => {
       const { king, eoa1 } = await getAddresses();

@@ -5,7 +5,6 @@
 pragma solidity ^0.8.0;
 
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import 'prb-math/contracts/PRBMathUD60x18.sol';
 import './WUSD.sol';
 
 interface IReserveOracle {
@@ -22,9 +21,6 @@ interface IReserveOracle {
 /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
 // TODO update vesting system
 contract King {
-    using PRBMathUD60x18 for uint256;
-    using PRBMathUD60x18 for uint128;
-
     struct Reserve {
         uint128 mintingInterestRate; // In Bps
         uint128 burningTaxRate; // In Bps
@@ -180,9 +176,9 @@ contract King {
         }
         // Reset the vesting params
         vesting.unlockPeriod = block.number + reserve.vestingPeriod;
-        vesting.amount = _amount.mul(reserve.mintingInterestRate).div(10000);
+        vesting.amount = (_amount * reserve.mintingInterestRate) / 10000;
 
-        freeReserves[_reserve] += _amount.mul(reserve.burningTaxRate).div(10000);
+        freeReserves[_reserve] += (_amount * reserve.burningTaxRate) / 10000;
 
         wusd.mint(_account, totalMinted);
         emit Praise(_reserve, _account, totalMinted);
@@ -198,7 +194,7 @@ contract King {
     function reprove(address _reserve, uint256 _amount) external reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
         require(reserve.isReproveWhitelisted, 'King: reserve not whitelisted for reproval');
-        uint256 sWagmeTax = _amount.mul(sWagmeTaxRate).div(10000);
+        uint256 sWagmeTax = (_amount * sWagmeTaxRate) / 10000;
         toExchange = IReserveOracle(reserve.reserveOracle).getExchangeRate(_amount - sWagmeTax);
 
         // Send to WAGME
@@ -255,7 +251,7 @@ contract King {
         if (block.number >= vesting.unlockPeriod) {
             _amount += vesting.amount;
         }
-        vested = _amount.mul(reserve.mintingInterestRate).div(10000);
+        vested = (_amount * reserve.mintingInterestRate) / 10000;
         amount = _amount;
     }
 
@@ -276,7 +272,6 @@ contract King {
     /// @param _reserve The output valuation
     /// @param _amount The amount of $FUSD to value
     /// @return The [[_reserve]] valuation for the given $FUSD
-    // TODO test
     function conversionRateFUSDToReserve(address _reserve, uint256 _amount)
         external
         view
@@ -290,14 +285,13 @@ contract King {
     /// @param _reserve The input valuation
     /// @param _amount The amount of [[_reserve]] to value
     /// @return The $FUSD valuation for the given [[_reserve]]
-    // TODO test
     function conversionRateReserveToFUSD(address _reserve, uint256 _amount)
         external
         view
         reserveExists(_reserve)
         returns (uint256)
     {
-        return _amount.div(reserves[_reserve].reserveOracle.getExchangeRate(1));
+        return (_amount * 10) / reserves[_reserve].reserveOracle.getExchangeRate(10);
     }
 
     /// @notice Withdraw [[_to]] a given [[_amount]] of [[_reserve]] and reset its freeReserves

@@ -10,6 +10,6 @@ contract KingReserveMIMOracle {
     using PRBMathUD60x18 for *;
 
     function getExchangeRate(uint256 amount) external view returns (uint256) {
-        return amount - amount.mul(10).div(100);
+        return amount - (amount * 10) / 100;
     }
 }
