@@ -259,10 +259,17 @@ describe('King', () => {
     });
 
     it('Should fail if the reserve is disabled', async () => {
-      const { deployer, king, mockERC20, usdtOracle } = await getAddresses();
+      const { king, mockERC20, usdtOracle } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address, true);
 
       await expect(king.reprove(mockERC20.address, 1)).to.be.revertedWith('King: reserve disabled');
+    });
+
+    it('Should fail if the reserve is not whitelisted for reproval', async () => {
+      const { king, mockERC20, usdtOracle } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address, false, false);
+
+      await expect(king.reprove(mockERC20.address, 1)).to.be.revertedWith('King: reserve not whitelisted for reproval');
     });
 
     it('Should burn 0.9 $WUSD, send 0.8 $MockERC20 and send 0.1 $WUSD to sWagme', async () => {

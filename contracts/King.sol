@@ -190,7 +190,6 @@ contract King {
     /// @param _reserve The reserve to exchange with
     /// @param _amount The amount of $WUSD to reprove
     /// @return toExchange The amount of chosen reserve exchanged
-    // TODO test isReproveWhitelisted require
     function reprove(address _reserve, uint256 _amount) external reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
         require(reserve.isReproveWhitelisted, 'King: reserve not whitelisted for reproval');
