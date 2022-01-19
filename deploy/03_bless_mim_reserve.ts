@@ -14,7 +14,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     (await deployments.get('KingReserveMIMOracle')).address,
   );
 
-  await (await king.bless(mimAddr, 1000, 2000, 5, oracle.address, false)).wait();
+  await (await king.bless(mimAddr, 1000, 2000, 5, oracle.address, false, true, 5000)).wait();
 };
 export default func;
 func.dependencies = ['FUSD', 'King', 'KingReserveMIMOracle'];
