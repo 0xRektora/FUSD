@@ -425,12 +425,23 @@ contract King {
         _to.transfer(_amount);
     }
 
+    /// @notice Return the current list of reserves
+    /// @return Return [[reserveAddresses]]
+    function getReserveAddresses() external view returns (address[] memory) {
+        return reserveAddresses;
+    }
+
+    /// @notice Return the current list of whitelisted reserve to be reproved
+    /// @return Return [[reserveReproveWhitelistAddresses]]
+    function getReserveReproveWhitelistAddresses() external view returns (address[] memory) {
+        return reserveReproveWhitelistAddresses;
+    }
+
     /// @dev Updated [[reserveReproveWhitelistAddresses]] when a reserve is updated or appended.
     /// Changes occurs only if needed. It is designed to be called only at the begining of a blessing [[bless()]]
     /// @param _reserve The reserve being utilized
     /// @param _reserveAddress The address of the reserve
     /// @param _isReproveWhitelisted The most updated version of reserve.isReproveWhitelisted
-    // TODO test reserveReproveWhitelistAddresses removal when _isReproveWhitelisted == false
     function _updateReserveReproveWhitelistAddresses(
         Reserve memory _reserve,
         address _reserveAddress,

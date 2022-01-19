@@ -97,6 +97,7 @@ describe('King', () => {
       // Check if the reserve has been correctly added to the array
       expect(await king.doesReserveExists(mockERC20.address)).to.equal(true);
     });
+
     it('Should update reserveReproveWhitelistAddresses when updating reserve', async () => {
       const { king, mockERC20, usdtOracle } = await getAddresses();
 
@@ -126,6 +127,22 @@ describe('King', () => {
         .withArgs(mockERC20.address, true, false);
       expect(await king.reserveReproveWhitelistAddresses(0)).to.equal(mockERC20.address);
       expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(true);
+    });
+
+    it('Should update correctly reserveReproveWhitelistAddresses', async () => {
+      const { king, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+
+      // whitelisted
+      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true)).wait();
+      expect(await king.getReserveReproveWhitelistAddresses()).to.include(mockERC20.address);
+
+      // remove from whitelist
+      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false)).wait();
+      expect(await king.getReserveReproveWhitelistAddresses()).to.not.include(mockERC20.address);
+
+      // whitelisted
+      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true)).wait();
+      expect(await king.getReserveReproveWhitelistAddresses()).to.include(mockERC20.address);
     });
   });
 
