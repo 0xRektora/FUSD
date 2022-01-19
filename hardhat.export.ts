@@ -38,6 +38,8 @@ const config: HardhatUserConfig = {
           : [],
     },
     mainnet: {
+      gasMultiplier: 2,
+      live: true,
       url: process.env.MAINNET || '',
       chainId: Number(process.env.CHAIN_ID || 1),
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
@@ -47,10 +49,9 @@ const config: HardhatUserConfig = {
     apiKey: process.env.BLOCKSCAN_KEY,
   },
   gasReporter: {
-    enabled: true,
     currency: 'USD',
-    token: 'AVAX',
-    gasPrice: 30,
+    token: 'FTM',
+    coinmarketcap: process.env.COINMARKETCAP_API ?? '',
   },
 };
 

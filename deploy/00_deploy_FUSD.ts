@@ -6,13 +6,15 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
 
-  await deploy('FUSD', {
+  const deployment = await deploy('FUSD', {
+    waitConfirmations: hre.network.live ? 12 : 1,
+    gasPrice: (await hre.ethers.provider.getGasPrice()).mul(2),
     from: deployer,
     log: true,
     args: [deployer],
   });
 
-  if (hre.network.name === 'mainnet') {
+  if (hre.network.live) {
     try {
       const fusd = await deployments.get('FUSD');
       await hre.run('verify', { network: 'mainnet', address: fusd.address, constructorArgsParams: [deployer] });

@@ -11,6 +11,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const args = [fusd.address, sWagmeAddress];
   await deploy('King', {
+    waitConfirmations: hre.network.live ? 12 : 1,
+    gasPrice: (await hre.ethers.provider.getGasPrice()).mul(2),
     from: deployer,
     log: true,
     args,
@@ -20,10 +22,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const king = await hre.ethers.getContractAt('King', (await deployments.get('King')).address);
   await (await fusd.claimCrown(king.address)).wait();
 
-  // Set sWagmeKingdom to king
-  await (await king.updateSWagmeKingdom(king.address)).wait();
-
-  if (hre.network.name === 'mainnet') {
+  if (hre.network.live) {
     try {
       await hre.run('verify', { network: 'mainnet', address: king.address, constructorArgsParams: args });
     } catch (err) {
