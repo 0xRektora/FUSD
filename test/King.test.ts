@@ -15,7 +15,7 @@ const getAddresses = async () => {
   const wusd = await (await ethers.getContractFactory('WUSD')).deploy(deployer.address);
   await wusd.deployed();
 
-  const king = await (await ethers.getContractFactory('King')).deploy(wusd.address, sWagmeKingdom.address, 5000);
+  const king = await (await ethers.getContractFactory('King')).deploy(wusd.address, sWagmeKingdom.address);
   await (await wusd.claimCrown(king.address)).wait();
 
   const mockERC20 = await (await ethers.getContractFactory('MockERC20')).deploy(ethers.utils.parseEther('10'));
@@ -44,6 +44,7 @@ const addReserve = async (
   oracleAddr: string,
   disabled?: boolean,
   isReproveWhitelisted?: boolean,
+  sWagmeTaxRate?: number,
 ) => {
   await (
     await king.bless(
@@ -54,6 +55,7 @@ const addReserve = async (
       oracleAddr,
       disabled !== undefined ? disabled : false,
       isReproveWhitelisted !== undefined ? isReproveWhitelisted : true,
+      sWagmeTaxRate !== undefined ? sWagmeTaxRate : 5000,
     )
   ).wait();
 };
@@ -71,11 +73,11 @@ describe('King', () => {
 
       // Only crown can execute
       await expect(
-        king.connect(eoa1).bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true),
+        king.connect(eoa1).bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true, 5000),
       ).to.be.revertedWith('King: Only crown can execute');
 
       // Event emitted
-      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true))
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true, 5000))
         .to.emit(king, 'RegisteredReserve')
         .withArgs(
           mockERC20.address,
@@ -87,6 +89,7 @@ describe('King', () => {
           usdtOracle.address,
           false,
           true,
+          5000,
         );
 
       // reserveAddresses array pushed oracle
@@ -101,27 +104,27 @@ describe('King', () => {
     it('Should update reserveReproveWhitelistAddresses when updating reserve', async () => {
       const { king, mockERC20, usdtOracle } = await getAddresses();
 
-      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true))
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true, 5000))
         .to.emit(king, 'UpdateReserveReproveWhitelistAddresses')
         // Whitelist added and created
         .withArgs(mockERC20.address, true, true);
       expect(await king.reserveReproveWhitelistAddresses(0)).to.equal(mockERC20.address);
       expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(true);
 
-      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false))
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false, 5000))
         .to.emit(king, 'UpdateReserveReproveWhitelistAddresses')
         // Whitelist updated to false
         .withArgs(mockERC20.address, false, false);
       expect(await king.reserveReproveWhitelistAddressesLength()).to.equal(ethers.BigNumber.from(0));
       expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(false);
 
-      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false))
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false, 5000))
         // Whitelist updated to false (no change happens)
         .to.not.emit(king, 'UpdateReserveReproveWhitelistAddresses');
       expect(await king.reserveReproveWhitelistAddressesLength()).to.equal(ethers.BigNumber.from(0));
       expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(false);
 
-      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true))
+      await expect(king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true, 5000))
         .to.emit(king, 'UpdateReserveReproveWhitelistAddresses')
         // Whitelist updated to true
         .withArgs(mockERC20.address, true, false);
@@ -129,19 +132,19 @@ describe('King', () => {
       expect((await king.reserves(mockERC20.address)).isReproveWhitelisted).to.equal(true);
     });
 
-    it('Should update correctly reserveReproveWhitelistAddresses', async () => {
+    it.only('Should update correctly reserveReproveWhitelistAddresses', async () => {
       const { king, mockERC20, usdtOracle, eoa1 } = await getAddresses();
 
       // whitelisted
-      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true)).wait();
+      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true, 5000)).wait();
       expect(await king.getReserveReproveWhitelistAddresses()).to.include(mockERC20.address);
 
       // remove from whitelist
-      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false)).wait();
+      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, false, 5000)).wait();
       expect(await king.getReserveReproveWhitelistAddresses()).to.not.include(mockERC20.address);
 
       // whitelisted
-      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true)).wait();
+      await (await king.bless(mockERC20.address, 1000, 2000, 5, usdtOracle.address, false, true, 5000)).wait();
       expect(await king.getReserveReproveWhitelistAddresses()).to.include(mockERC20.address);
     });
   });
@@ -371,7 +374,7 @@ describe('King', () => {
 
     it('Should burn 0.9 $WUSD, send 0.8 $MockERC20 to reprover and 0.1 $WUSD to sWagme', async () => {
       const { deployer, king, wusd, mockERC20, usdtOracle, sWagmeKingdom, eoa1 } = await getAddresses();
-      await addReserve(king, mockERC20.address, usdtOracle.address);
+      await addReserve(king, mockERC20.address, usdtOracle.address, false, true, 5000);
 
       const mintAmount = ethers.utils.parseEther('1');
       const toBeExchanged = await usdtOracle.getExchangeRate(mintAmount);
@@ -381,7 +384,7 @@ describe('King', () => {
 
       const vestingAmount = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
       const burnAmount = mintAmount.sub(vestingAmount);
-      const sWagmeTax = burnAmount.mul(await king.sWagmeTaxRate()).div(10000);
+      const sWagmeTax = burnAmount.mul(5000).div(10000);
       const trueBurnAmountAfterTax = burnAmount.sub(sWagmeTax);
       const reproveReserveExchangedAmount = await king.conversionRateFUSDToReserve(
         mockERC20.address,

@@ -28,6 +28,7 @@ contract King {
         IReserveOracle reserveOracle;
         bool disabled;
         bool isReproveWhitelisted;
+        uint256 sWagmeTaxRate; // In Bps
     }
 
     struct Vesting {
@@ -38,7 +39,6 @@ contract King {
     address public crown;
     WUSD public wusd;
     address public sWagmeKingdom;
-    uint256 public sWagmeTaxRate; // In Bps
 
     address[] public reserveAddresses;
     address[] public reserveReproveWhitelistAddresses; // Array of whitelisted reserve accepted in reprove()
@@ -56,7 +56,8 @@ contract King {
         uint256 vestingPeriod,
         address reserveOracle,
         bool disabled,
-        bool isReproveWhitelisted // If this reserve can be used by users to reprove()
+        bool isReproveWhitelisted, // If this reserve can be used by users to reprove()
+        uint256 sWagmeTaxRate
     );
     event Praise(address indexed reserve, address indexed to, uint256 amount, Vesting vesting);
     event Reprove(address indexed reserve, address indexed from, uint256 amount);
@@ -76,15 +77,10 @@ contract King {
         _;
     }
 
-    constructor(
-        address _wusd,
-        address _sWagmeKingdom,
-        uint256 _sWagmeTaxRate
-    ) {
+    constructor(address _wusd, address _sWagmeKingdom) {
         crown = msg.sender;
         wusd = WUSD(_wusd);
         sWagmeKingdom = _sWagmeKingdom;
-        sWagmeTaxRate = _sWagmeTaxRate;
     }
 
     /// @notice Returns the total number of reserves
@@ -116,7 +112,8 @@ contract King {
         uint256 _vestingPeriod,
         address _reserveOracle,
         bool _disabled,
-        bool _isReproveWhitelisted
+        bool _isReproveWhitelisted,
+        uint256 _sWagmeTaxRate
     ) external onlyCrown {
         require(_reserveOracle != address(0), 'King: Invalid oracle');
 
@@ -130,6 +127,7 @@ contract King {
         reserve.reserveOracle = IReserveOracle(_reserveOracle);
         reserve.disabled = _disabled;
         reserve.isReproveWhitelisted = _isReproveWhitelisted;
+        reserve.sWagmeTaxRate = _sWagmeTaxRate;
 
         // !\ Careful of gas cost /!\
         if (!doesReserveExists(_reserve)) {
@@ -145,7 +143,8 @@ contract King {
             _vestingPeriod,
             _reserveOracle,
             _disabled,
-            _isReproveWhitelisted
+            _isReproveWhitelisted,
+            _sWagmeTaxRate
         );
     }
 
@@ -190,7 +189,7 @@ contract King {
     function reprove(address _reserve, uint256 _amount) external reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
         require(reserve.isReproveWhitelisted, 'King: reserve not whitelisted for reproval');
-        uint256 sWagmeTax = (_amount * sWagmeTaxRate) / 10000;
+        uint256 sWagmeTax = (_amount * reserve.sWagmeTaxRate) / 10000;
         toExchange = IReserveOracle(reserve.reserveOracle).getExchangeRate(_amount - sWagmeTax);
 
         // Send to WAGME
@@ -392,12 +391,6 @@ contract King {
     /// @param _sWagmeKingdom The new address
     function updateSWagmeKingdom(address _sWagmeKingdom) external onlyCrown {
         sWagmeKingdom = _sWagmeKingdom;
-    }
-
-    /// @notice Update the sWagmeTaxRate state var
-    /// @param _sWagmeTaxRate The new tax rate
-    function updateSWagmeTaxRate(uint256 _sWagmeTaxRate) external onlyCrown {
-        sWagmeTaxRate = _sWagmeTaxRate;
     }
 
     /// @notice Update the owner
