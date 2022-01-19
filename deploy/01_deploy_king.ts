@@ -6,20 +6,20 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
 
-  const wusd = await hre.ethers.getContractAt('WUSD', (await deployments.get('WUSD')).address);
+  const fusd = await hre.ethers.getContractAt('FUSD', (await deployments.get('FUSD')).address);
   const sWagmeAddress = '0x'.padEnd(42, '0');
   const sWagmeTaxRate = '5000'; // In Bps
 
-  const args = [wusd.address, sWagmeAddress, sWagmeTaxRate];
+  const args = [fusd.address, sWagmeAddress, sWagmeTaxRate];
   await deploy('King', {
     from: deployer,
     log: true,
     args,
   });
 
-  // Set WUSD king
+  // Set FUSD king
   const king = await hre.ethers.getContractAt('King', (await deployments.get('King')).address);
-  await (await wusd.claimCrown(king.address)).wait();
+  await (await fusd.claimCrown(king.address)).wait();
 
   // Set sWagmeKingdom to king
   await (await king.updateSWagmeKingdom(king.address)).wait();
@@ -33,5 +33,5 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   }
 };
 export default func;
-func.dependencies = ['WUSD'];
+func.dependencies = ['FUSD'];
 func.tags = ['King'];

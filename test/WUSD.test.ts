@@ -10,8 +10,8 @@ const setBalance = async (addr: string, ether: number) => {
 
 const getAddresses = async () => {
   const deployer = (await ethers.getSigners())[0];
-  const wusd = await (await ethers.getContractFactory('WUSD')).deploy(deployer.address);
-  await wusd.deployed();
+  const fusd = await (await ethers.getContractFactory('FUSD')).deploy(deployer.address);
+  await fusd.deployed();
 
   const usdtOracle = await (await ethers.getContractFactory('KingReserveUSDTOracle')).deploy();
 
@@ -20,7 +20,7 @@ const getAddresses = async () => {
 
   return {
     deployer,
-    wusd,
+    fusd,
     usdtOracle,
     eoa1,
   };
@@ -28,18 +28,18 @@ const getAddresses = async () => {
 
 describe('King', () => {
   it('Can be minted only by the owner', async () => {
-    const { wusd, eoa1 } = await getAddresses();
-    await expect(wusd.connect(eoa1).mint(eoa1.address, 1)).to.be.revertedWith('WUSD: Only king is authorized');
+    const { fusd, eoa1 } = await getAddresses();
+    await expect(fusd.connect(eoa1).mint(eoa1.address, 1)).to.be.revertedWith('FUSD: Only king is authorized');
 
-    await expect(wusd.mint(eoa1.address, 1)).to.not.be.reverted;
-    expect(await wusd.balanceOf(eoa1.address)).to.equal(ethers.BigNumber.from(1));
+    await expect(fusd.mint(eoa1.address, 1)).to.not.be.reverted;
+    expect(await fusd.balanceOf(eoa1.address)).to.equal(ethers.BigNumber.from(1));
   });
 
   it("Can't change owner if not by him", async () => {
-    const { deployer, wusd, eoa1 } = await getAddresses();
-    await expect(wusd.connect(eoa1).claimCrown(eoa1.address)).to.be.revertedWith('WUSD: Only king is authorized');
+    const { deployer, fusd, eoa1 } = await getAddresses();
+    await expect(fusd.connect(eoa1).claimCrown(eoa1.address)).to.be.revertedWith('FUSD: Only king is authorized');
 
-    await expect(wusd.claimCrown(eoa1.address)).to.not.be.reverted;
-    expect(await wusd.king()).to.equal(eoa1.address);
+    await expect(fusd.claimCrown(eoa1.address)).to.not.be.reverted;
+    expect(await fusd.king()).to.equal(eoa1.address);
   });
 });

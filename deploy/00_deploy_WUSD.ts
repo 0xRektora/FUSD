@@ -6,7 +6,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
 
-  await deploy('WUSD', {
+  await deploy('FUSD', {
     from: deployer,
     log: true,
     args: [deployer],
@@ -14,12 +14,12 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   if (hre.network.name === 'mainnet') {
     try {
-      const wusd = await deployments.get('WUSD');
-      await hre.run('verify', { network: 'mainnet', address: wusd.address, constructorArgsParams: [deployer] });
+      const fusd = await deployments.get('FUSD');
+      await hre.run('verify', { network: 'mainnet', address: fusd.address, constructorArgsParams: [deployer] });
     } catch (err) {
       console.log(err);
     }
   }
 };
 export default func;
-func.tags = ['WUSD'];
+func.tags = ['FUSD'];

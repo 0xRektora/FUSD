@@ -5,21 +5,20 @@
 pragma solidity ^0.8.0;
 
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
-import './WUSD.sol';
+import './FUSD.sol';
 
 interface IReserveOracle {
     function getExchangeRate(uint256 amount) external view returns (uint256);
 }
 
-/// @title King contract. Mint/Burn $WUSD against chosen assets
+/// @title King contract. Mint/Burn $FUSD against chosen assets
 /// @author 0xRektora (https://github.com/0xRektora)
 /// @notice Crown has the ability to add and disable reserve, which can be any ERC20 (stable/LP) given an oracle
-/// that compute the exchange rates between $WUSD and the latter.
+/// that compute the exchange rates between $FUSD and the latter.
 /// @dev Potential flaw of this tokenomics:
 /// - Ability for the crown to change freely reserve parameters. (suggestion: immutable reserve/reserve parameter)
 /// - Ability to withdraw assets and break the burning mechanism.
 /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
-// TODO rename WUSD to FUSD
 contract King {
     struct Reserve {
         uint128 mintingInterestRate; // In Bps
@@ -33,11 +32,11 @@ contract King {
 
     struct Vesting {
         uint256 unlockPeriod; // In block
-        uint256 amount; // In WUSD
+        uint256 amount; // In FUSD
     }
 
     address public crown;
-    WUSD public wusd;
+    FUSD public fusd;
     address public sWagmeKingdom;
 
     address[] public reserveAddresses;
@@ -45,7 +44,7 @@ contract King {
     mapping(address => Reserve) public reserves;
     mapping(address => Vesting[]) public vestings;
 
-    mapping(address => uint256) public freeReserves; // In WUSD
+    mapping(address => uint256) public freeReserves; // In FUSD
 
     event RegisteredReserve(
         address indexed reserve,
@@ -77,9 +76,9 @@ contract King {
         _;
     }
 
-    constructor(address _wusd, address _sWagmeKingdom) {
+    constructor(address _fusd, address _sWagmeKingdom) {
         crown = msg.sender;
-        wusd = WUSD(_wusd);
+        fusd = FUSD(_fusd);
         sWagmeKingdom = _sWagmeKingdom;
     }
 
@@ -148,12 +147,12 @@ contract King {
         );
     }
 
-    /// @notice Mint a given [[_amount]] of $WUSD using [[_reserve]] asset to an [[_account]]
-    /// @dev Compute and send to the King the amount of [[_reserve]] in exchange of $WUSD.
+    /// @notice Mint a given [[_amount]] of $FUSD using [[_reserve]] asset to an [[_account]]
+    /// @dev Compute and send to the King the amount of [[_reserve]] in exchange of $FUSD.
     /// @param _reserve The asset to be used (ERC20)
-    /// @param _account The receiver of $WUSD
-    /// @param _amount The amount of $WUSD minted
-    /// @return totalMinted True amount of $WUSD minted
+    /// @param _account The receiver of $FUSD
+    /// @param _amount The amount of $FUSD minted
+    /// @return totalMinted True amount of $FUSD minted
     function praise(
         address _reserve,
         address _account,
@@ -176,15 +175,15 @@ contract King {
 
         totalMinted -= vesting.amount;
 
-        wusd.mint(_account, totalMinted);
+        fusd.mint(_account, totalMinted);
         emit Praise(_reserve, _account, totalMinted, vesting);
 
         return totalMinted;
     }
 
-    /// @notice Burn $WUSD in exchange of the desired reserve. A certain amount could be taxed and sent to sWagme
+    /// @notice Burn $FUSD in exchange of the desired reserve. A certain amount could be taxed and sent to sWagme
     /// @param _reserve The reserve to exchange with
-    /// @param _amount The amount of $WUSD to reprove
+    /// @param _amount The amount of $FUSD to reprove
     /// @return toExchange The amount of chosen reserve exchanged
     function reprove(address _reserve, uint256 _amount) external reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
@@ -193,8 +192,8 @@ contract King {
         toExchange = IReserveOracle(reserve.reserveOracle).getExchangeRate(_amount - sWagmeTax);
 
         // Send to WAGME
-        wusd.burnFrom(msg.sender, _amount - sWagmeTax);
-        wusd.transferFrom(msg.sender, sWagmeKingdom, sWagmeTax);
+        fusd.burnFrom(msg.sender, _amount - sWagmeTax);
+        fusd.transferFrom(msg.sender, sWagmeKingdom, sWagmeTax);
 
         // Send underlyings to sender
         IERC20(_reserve).transfer(msg.sender, toExchange);
@@ -204,7 +203,7 @@ contract King {
 
     /// @notice View function to return info about an account vestings
     /// @param _account The account to check for
-    /// @return redeemable The amount of $WUSD that can be redeemed
+    /// @return redeemable The amount of $FUSD that can be redeemed
     /// @return numOfVestings The number of vestings of [[_account]]
     function getVestingInfos(address _account) external view returns (uint256 redeemable, uint256 numOfVestings) {
         Vesting[] memory accountVestings = vestings[_account];
@@ -239,9 +238,9 @@ contract King {
     }
 
     /// @notice Redeem any ongoing vesting for a given account
-    /// @dev Mint $WUSD and remove vestings that has been redeemed from [[vestings[_account]]]
+    /// @dev Mint $FUSD and remove vestings that has been redeemed from [[vestings[_account]]]
     /// @param _account The vesting account
-    /// @return redeemed The amount of $WUSD redeemed
+    /// @return redeemed The amount of $FUSD redeemed
     function redeemVestings(address _account) external returns (uint256 redeemed) {
         Vesting[] storage accountVestings = vestings[_account];
         for (uint256 i; i < accountVestings.length; i++) {
@@ -251,7 +250,7 @@ contract King {
             }
         }
         if (redeemed > 0) {
-            wusd.mint(_account, redeemed);
+            fusd.mint(_account, redeemed);
             emit VestingRedeem(_account, redeemed);
         }
     }
@@ -269,11 +268,11 @@ contract King {
         }
     }
 
-    /// @notice Useful for frontend. Get an estimate exchange of $WUSD vs desired reserve.
+    /// @notice Useful for frontend. Get an estimate exchange of $FUSD vs desired reserve.
     /// @param _reserve The asset to be used (ERC20)
-    /// @param _amount The amount of $WUSD to mint
+    /// @param _amount The amount of $FUSD to mint
     /// @return toExchange Amount of reserve to exchange,
-    /// @return amount True amount of $WUSD to be exchanged
+    /// @return amount True amount of $FUSD to be exchanged
     /// @return vested Any vesting created
     function getPraiseEstimates(address _reserve, uint256 _amount)
         external
@@ -369,7 +368,7 @@ contract King {
     /// @notice Withdraw a chosen amount of free reserve in the chosen reserve
     /// @param _reserve The asset to be used (ERC20)
     /// @param _to The receiver
-    /// @param _amount The amount to withdrawn (in WUSD)
+    /// @param _amount The amount to withdrawn (in FUSD)
     /// @return assetWithdrawn The amount of asset withdrawn after the exchange rate
     function withdrawFreeReserve(
         address _reserve,

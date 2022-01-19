@@ -4,17 +4,17 @@
 
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import '@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol';
 
-contract WUSD is ERC20Burnable {
+contract FUSD is ERC20Burnable {
     address public king;
 
-    constructor(address _king) ERC20("Wagme USD", "WUSD") {
+    constructor(address _king) ERC20('Frog USD', 'FUSD') {
         king = _king;
     }
 
     modifier onlyKing() {
-        require(msg.sender == king, "WUSD: Only king is authorized");
+        require(msg.sender == king, 'FUSD: Only king is authorized');
         _;
     }
 
