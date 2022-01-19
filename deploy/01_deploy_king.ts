@@ -8,9 +8,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   const fusd = await hre.ethers.getContractAt('FUSD', (await deployments.get('FUSD')).address);
   const sWagmeAddress = '0x'.padEnd(42, '0');
-  const sWagmeTaxRate = '5000'; // In Bps
 
-  const args = [fusd.address, sWagmeAddress, sWagmeTaxRate];
+  const args = [fusd.address, sWagmeAddress];
   await deploy('King', {
     from: deployer,
     log: true,
