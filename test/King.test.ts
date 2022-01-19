@@ -197,17 +197,20 @@ describe('King', () => {
       expect(await wusd.balanceOf(deployer.address)).to.equal(wusdMinted);
     });
 
-    it('Should add new vesting entry for account', async () => {
-      const { deployer, king, wusd, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+    it('Should add new vesting entries for account', async () => {
+      const { deployer, king, mockERC20, usdtOracle } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address);
 
       const mintAmount = ethers.utils.parseEther('1');
       const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
       const vestingCreated = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
-      const wusdMinted = mintAmount.sub(vestingCreated);
 
-      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
+      await (await mockERC20.approve(king.address, underlyingExchanged.mul(2))).wait();
       await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+
+      expect((await king.vestings(deployer.address, 0)).amount).to.equal(vestingCreated);
+      expect((await king.vestings(deployer.address, 1)).amount).to.equal(vestingCreated);
     });
 
     it('Should add the burningTax of the reserve into its freeReserve', async () => {
@@ -227,6 +230,48 @@ describe('King', () => {
       await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
       expect(await king.freeReserves(mockERC20.address)).to.be.equal(expectedFreeReserveAddedInFUSD.mul(2));
     });
+  });
+
+  describe('getVestingInfos', () => {
+    it('Should compute the proper vesting infos', async () => {
+      const { deployer, king, wusd, mockERC20, usdtOracle } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const vestingCreated = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged.mul(2))).wait();
+
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+
+      await mine(5);
+
+      const vestingInfos = await king.getVestingInfos(deployer.address);
+
+      expect(vestingInfos.redeemable).to.be.equal(vestingCreated.mul(2));
+      expect(vestingInfos.numOfVestings).to.be.equal(ethers.BigNumber.from(2));
+    });
+  });
+
+  describe('redeemVestings', () => {
+    it('Should redeem 0 from vestings', async () => {
+      const { deployer, king, wusd, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged.mul(2))).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+
+      await mine(5);
+
+      king.connect(eoa1).redeemVestings(deployer.address);
+
+      expect(await wusd.balanceOf(eoa1.address)).to.equal(ethers.BigNumber.from(0));
+    });
 
     it('Should vest 10% and redeem them after 5 blocks', async () => {
       const { deployer, king, wusd, mockERC20, usdtOracle } = await getAddresses();
@@ -236,23 +281,52 @@ describe('King', () => {
       const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
       const vestingCreated = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
 
-      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
-      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await mockERC20.approve(king.address, underlyingExchanged.mul(2))).wait();
 
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
       expect((await king.vestings(deployer.address, 0)).unlockPeriod).to.be.equal(
         (await ethers.provider.getBlockNumber()) + 5,
       );
+
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      expect((await king.vestings(deployer.address, 1)).unlockPeriod).to.be.equal(
+        (await ethers.provider.getBlockNumber()) + 5,
+      );
+
       expect((await king.vestings(deployer.address, 0)).amount).to.be.equal(vestingCreated);
+      expect((await king.vestings(deployer.address, 1)).amount).to.be.equal(vestingCreated);
 
       await mine(5);
 
       await expect(king.redeemVestings(deployer.address))
         .to.emit(wusd, 'Transfer')
-        .withArgs('0x'.padEnd(42, '0'), deployer.address, vestingCreated)
+        .withArgs('0x'.padEnd(42, '0'), deployer.address, vestingCreated.mul(2))
         .and.to.emit(king, 'VestingRedeem')
-        .withArgs(deployer.address, vestingCreated);
+        .withArgs(deployer.address, vestingCreated.mul(2));
 
-      expect(await wusd.balanceOf(deployer.address)).to.equal(mintAmount);
+      expect(await wusd.balanceOf(deployer.address)).to.equal(mintAmount.mul(2));
+    });
+
+    it('Should remove vesting infos after redeem', async () => {
+      const { deployer, king, wusd, mockERC20, usdtOracle } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged.mul(2))).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+
+      await mine(5);
+
+      await (await king.redeemVestings(deployer.address)).wait();
+
+      const vestingInfos = await king.getVestingInfos(deployer.address);
+
+      const bigZero = ethers.BigNumber.from(0);
+      expect(vestingInfos.redeemable).to.be.equal(bigZero);
+      expect(vestingInfos.numOfVestings).to.be.equal(bigZero);
     });
   });
 

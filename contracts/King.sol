@@ -155,7 +155,6 @@ contract King {
     /// @param _account The receiver of $WUSD
     /// @param _amount The amount of $WUSD minted
     /// @return totalMinted True amount of $WUSD minted
-    // TODO test vestings array add new entry
     function praise(
         address _reserve,
         address _account,
@@ -204,24 +203,70 @@ contract King {
         emit Reprove(_reserve, msg.sender, _amount);
     }
 
+    /// @notice View function to return info about an account vestings
+    /// @param _account The account to check for
+    /// @return redeemable The amount of $WUSD that can be redeemed
+    /// @return numOfVestings The number of vestings of [[_account]]
+    function getVestingInfos(address _account) external view returns (uint256 redeemable, uint256 numOfVestings) {
+        Vesting[] memory accountVestings = vestings[_account];
+        uint256 arrLength = accountVestings.length;
+        numOfVestings = arrLength;
+        for (uint256 i; i < arrLength; i++) {
+            uint256 tmp = _computeRedeemableVestings(accountVestings, i);
+            redeemable += tmp;
+            if (tmp > 0) {
+                arrLength--;
+            }
+            if (arrLength > 0 && i == arrLength - 1) {
+                redeemable += tmp;
+            }
+        }
+    }
+
+    /// @dev Used by [[getVestingInfos()]]
+    /// @param _accountVestings A memory copy of [[vestings]]
+    /// @param _i The element of array to deal with (must be withing bounds, no checks are made)
+    /// @return redeemed The total redeemed, if > 0 array size is lower
+    function _computeRedeemableVestings(Vesting[] memory _accountVestings, uint256 _i)
+        internal
+        view
+        returns (uint256 redeemed)
+    {
+        if (block.number >= _accountVestings[_i].unlockPeriod) {
+            redeemed += _accountVestings[_i].amount;
+            // We remove the vesting when redeemed
+            _accountVestings[_i] = _accountVestings[_accountVestings.length - 1];
+        }
+    }
+
     /// @notice Redeem any ongoing vesting for a given account
-    /// @dev Mint $WUSD and reset vesting terms
+    /// @dev Mint $WUSD and remove vestings that has been redeemed from [[vestings[_account]]]
     /// @param _account The vesting account
     /// @return redeemed The amount of $WUSD redeemed
-    // TODO test vesting removal after redeem
     function redeemVestings(address _account) external returns (uint256 redeemed) {
         Vesting[] storage accountVestings = vestings[_account];
         for (uint256 i; i < accountVestings.length; i++) {
-            if (block.number >= accountVestings[i].unlockPeriod) {
-                redeemed += accountVestings[i].amount;
-                // We remove the vesting when redeemed
-                accountVestings[i] = accountVestings[accountVestings.length - 1];
-                accountVestings.pop();
+            redeemed += _redeemVesting(accountVestings, i);
+            if (accountVestings.length > 0 && i == accountVestings.length - 1) {
+                redeemed += _redeemVesting(accountVestings, i);
             }
         }
         if (redeemed > 0) {
             wusd.mint(_account, redeemed);
             emit VestingRedeem(_account, redeemed);
+        }
+    }
+
+    /// @dev May remove element from the passed array of [[_accountVestings]]
+    /// @param _accountVestings The storage of [[vestings]]
+    /// @param _i The element of array to deal with (must be withing bounds, no checks are made)
+    /// @return redeemed The total redeemed, if > 0 array size is lower
+    function _redeemVesting(Vesting[] storage _accountVestings, uint256 _i) internal returns (uint256 redeemed) {
+        if (block.number >= _accountVestings[_i].unlockPeriod) {
+            redeemed += _accountVestings[_i].amount;
+            // We remove the vesting when redeemed
+            _accountVestings[_i] = _accountVestings[_accountVestings.length - 1];
+            _accountVestings.pop();
         }
     }
 
@@ -231,7 +276,6 @@ contract King {
     /// @return toExchange Amount of reserve to exchange,
     /// @return amount True amount of $WUSD to be exchanged
     /// @return vested Any vesting created
-    // TODO test substract vesting from amount
     function getPraiseEstimates(address _reserve, uint256 _amount)
         external
         view
@@ -386,6 +430,7 @@ contract King {
     /// @param _reserve The reserve being utilized
     /// @param _reserveAddress The address of the reserve
     /// @param _isReproveWhitelisted The most updated version of reserve.isReproveWhitelisted
+    // TODO test reserveReproveWhitelistAddresses removal when _isReproveWhitelisted == false
     function _updateReserveReproveWhitelistAddresses(
         Reserve memory _reserve,
         address _reserveAddress,
