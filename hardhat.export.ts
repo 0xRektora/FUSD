@@ -36,9 +36,6 @@ const config: HardhatUserConfig = {
               },
             ]
           : [],
-      forking: {
-        url: process.env.MAINNET || '',
-      },
     },
     mainnet: {
       url: process.env.MAINNET || '',
