@@ -19,7 +19,6 @@ interface IReserveOracle {
 /// - Ability for the crown to change freely reserve parameters. (suggestion: immutable reserve/reserve parameter)
 /// - Ability to withdraw assets and break the burning mechanism.
 /// (suggestion: if reserve not immutable, compute a max amount withdrawable delta for a given reserve)
-// TODO update vesting system
 // TODO rename WUSD to FUSD
 contract King {
     struct Reserve {
@@ -59,7 +58,6 @@ contract King {
         bool disabled,
         bool isReproveWhitelisted // If this reserve can be used by users to reprove()
     );
-    // TODO update praise test
     event Praise(address indexed reserve, address indexed to, uint256 amount, Vesting vesting);
     event Reprove(address indexed reserve, address indexed from, uint256 amount);
     event VestingRedeem(address indexed to, uint256 amount);
@@ -157,7 +155,6 @@ contract King {
     /// @param _account The receiver of $WUSD
     /// @param _amount The amount of $WUSD minted
     /// @return totalMinted True amount of $WUSD minted
-    // TODO update praise test to substract vesting from total minted
     // TODO test vestings array add new entry
     function praise(
         address _reserve,

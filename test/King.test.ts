@@ -132,18 +132,14 @@ describe('King', () => {
   describe('getPraiseEstimates', () => {
     it("Should fail if the reserve doesn't exists", async () => {
       const { deployer, king, mockERC20 } = await getAddresses();
-      expect(king.getPraiseEstimates(mockERC20.address, deployer.address, 1)).to.be.revertedWith(
-        "King: reserve doesn't exists",
-      );
+      expect(king.getPraiseEstimates(mockERC20.address, 1)).to.be.revertedWith("King: reserve doesn't exists");
     });
 
     it('Should fail if the reserve is disabled', async () => {
       const { deployer, king, mockERC20, usdtOracle } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address, true);
 
-      await expect(king.getPraiseEstimates(mockERC20.address, deployer.address, 1)).to.be.revertedWith(
-        'King: reserve disabled',
-      );
+      await expect(king.getPraiseEstimates(mockERC20.address, 1)).to.be.revertedWith('King: reserve disabled');
     });
 
     it('Should estimate 1 WUSD would estimate to 1.1 $MockERC20 exchanged, 1 $WUSD minted and 0.1 $WUSD vested', async () => {
@@ -154,11 +150,7 @@ describe('King', () => {
       const vested = amount.mul(10).div(100);
       const toExchange = await usdtOracle.getExchangeRate(amount);
 
-      expect(await king.getPraiseEstimates(mockERC20.address, deployer.address, amount)).to.eql([
-        toExchange,
-        amount,
-        vested,
-      ]);
+      expect(await king.getPraiseEstimates(mockERC20.address, amount)).to.eql([toExchange, amount.sub(vested), vested]);
     });
   });
 
@@ -191,17 +183,31 @@ describe('King', () => {
 
       const mintAmount = ethers.utils.parseEther('1');
       const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const vestingCreated = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
+      const wusdMinted = mintAmount.sub(vestingCreated);
 
       await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
       await expect(king.praise(mockERC20.address, deployer.address, mintAmount))
         .to.emit(mockERC20, 'Transfer')
         .withArgs(deployer.address, king.address, underlyingExchanged)
         .and.to.emit(wusd, 'Transfer')
-        .withArgs('0x'.padEnd(42, '0'), deployer.address, mintAmount)
-        .and.to.emit(king, 'Praise')
-        .withArgs(mockERC20.address, deployer.address, mintAmount);
+        .withArgs('0x'.padEnd(42, '0'), deployer.address, wusdMinted)
+        .and.to.emit(king, 'Praise');
 
-      expect(await wusd.balanceOf(deployer.address)).to.equal(mintAmount);
+      expect(await wusd.balanceOf(deployer.address)).to.equal(wusdMinted);
+    });
+
+    it('Should add new vesting entry for account', async () => {
+      const { deployer, king, wusd, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+      await addReserve(king, mockERC20.address, usdtOracle.address);
+
+      const mintAmount = ethers.utils.parseEther('1');
+      const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const vestingCreated = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
+      const wusdMinted = mintAmount.sub(vestingCreated);
+
+      await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
     });
 
     it('Should add the burningTax of the reserve into its freeReserve', async () => {
@@ -222,31 +228,31 @@ describe('King', () => {
       expect(await king.freeReserves(mockERC20.address)).to.be.equal(expectedFreeReserveAddedInFUSD.mul(2));
     });
 
-    it('Should vest 10% and redeem them after 5 blocks ', async () => {
-      const { deployer, king, wusd, mockERC20, usdtOracle, eoa1 } = await getAddresses();
+    it('Should vest 10% and redeem them after 5 blocks', async () => {
+      const { deployer, king, wusd, mockERC20, usdtOracle } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address);
 
       const mintAmount = ethers.utils.parseEther('1');
-      const vestingAmount = mintAmount.mul(10).div(100);
       const underlyingExchanged = await usdtOracle.getExchangeRate(mintAmount);
+      const vestingCreated = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
 
       await (await mockERC20.approve(king.address, underlyingExchanged)).wait();
       await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
 
-      expect((await king.vestings(deployer.address)).unlockPeriod).to.be.equal(
+      expect((await king.vestings(deployer.address, 0)).unlockPeriod).to.be.equal(
         (await ethers.provider.getBlockNumber()) + 5,
       );
-      expect((await king.vestings(deployer.address)).amount).to.be.equal(vestingAmount);
+      expect((await king.vestings(deployer.address, 0)).amount).to.be.equal(vestingCreated);
 
       await mine(5);
 
-      await expect(king.redeemVesting(deployer.address))
+      await expect(king.redeemVestings(deployer.address))
         .to.emit(wusd, 'Transfer')
-        .withArgs('0x'.padEnd(42, '0'), deployer.address, vestingAmount)
+        .withArgs('0x'.padEnd(42, '0'), deployer.address, vestingCreated)
         .and.to.emit(king, 'VestingRedeem')
-        .withArgs(deployer.address, vestingAmount);
+        .withArgs(deployer.address, vestingCreated);
 
-      expect(await wusd.balanceOf(deployer.address)).to.equal(mintAmount.add(vestingAmount));
+      expect(await wusd.balanceOf(deployer.address)).to.equal(mintAmount);
     });
   });
 
@@ -272,37 +278,39 @@ describe('King', () => {
       await expect(king.reprove(mockERC20.address, 1)).to.be.revertedWith('King: reserve not whitelisted for reproval');
     });
 
-    it('Should burn 0.9 $WUSD, send 0.8 $MockERC20 and send 0.1 $WUSD to sWagme', async () => {
+    it('Should burn 0.9 $WUSD, send 0.8 $MockERC20 to reprover and 0.1 $WUSD to sWagme', async () => {
       const { deployer, king, wusd, mockERC20, usdtOracle, sWagmeKingdom, eoa1 } = await getAddresses();
       await addReserve(king, mockERC20.address, usdtOracle.address);
 
-      const burnAmount = ethers.utils.parseEther('1');
+      const mintAmount = ethers.utils.parseEther('1');
+      const toBeExchanged = await usdtOracle.getExchangeRate(mintAmount);
+
+      await (await mockERC20.approve(king.address, toBeExchanged)).wait();
+      await (await king.praise(mockERC20.address, deployer.address, mintAmount)).wait();
+
+      const vestingAmount = mintAmount.mul((await king.reserves(mockERC20.address)).mintingInterestRate).div(10000);
+      const burnAmount = mintAmount.sub(vestingAmount);
       const sWagmeTax = burnAmount.mul(await king.sWagmeTaxRate()).div(10000);
-      const toBeBurned = burnAmount.sub(sWagmeTax);
-      const underlyingExchanged = await usdtOracle.getExchangeRate(burnAmount.sub(sWagmeTax));
+      const trueBurnAmountAfterTax = burnAmount.sub(sWagmeTax);
+      const reproveReserveExchangedAmount = await king.conversionRateFUSDToReserve(
+        mockERC20.address,
+        trueBurnAmountAfterTax,
+      );
 
-      // Might be obsolete, used for this special case only to calculate accurately
-      await (
-        await mockERC20.transfer(
-          eoa1.address,
-          (await mockERC20.balanceOf(deployer.address)).sub(await usdtOracle.getExchangeRate(burnAmount)),
-        )
-      ).wait();
-
-      await (await mockERC20.approve(king.address, await usdtOracle.getExchangeRate(burnAmount))).wait();
-      await (await king.praise(mockERC20.address, deployer.address, burnAmount)).wait();
+      // We set the balance of reprover to 0 before reprove() to compute assert easily
+      await (await mockERC20.transfer(eoa1.address, await mockERC20.balanceOf(deployer.address))).wait();
 
       await (await wusd.approve(king.address, burnAmount)).wait();
       await expect(king.reprove(mockERC20.address, burnAmount))
         // Burn WUSD
         .to.emit(wusd, 'Transfer')
-        .withArgs(deployer.address, '0x'.padEnd(42, '0'), toBeBurned)
+        .withArgs(deployer.address, '0x'.padEnd(42, '0'), trueBurnAmountAfterTax)
         // Transfer WUSD to sWagme
         .and.to.emit(wusd, 'Transfer')
         .withArgs(deployer.address, sWagmeKingdom.address, sWagmeTax)
         // Transfer reserve to account
         .and.to.emit(mockERC20, 'Transfer')
-        .withArgs(king.address, deployer.address, underlyingExchanged)
+        .withArgs(king.address, deployer.address, reproveReserveExchangedAmount)
         // Emit King reprove
         .and.to.emit(king, 'Reprove')
         .withArgs(mockERC20.address, deployer.address, burnAmount);
@@ -321,7 +329,7 @@ describe('King', () => {
 
       // Check MockERC20 balance of reprover
       expect(await mockERC20.balanceOf(deployer.address)).to.be.equal(
-        underlyingExchanged,
+        reproveReserveExchangedAmount,
         '$MockERC20 balance of reprover to be underlyingExchanged',
       );
     });
