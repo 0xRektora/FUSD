@@ -23,7 +23,7 @@ contract King {
         IReserveOracle reserveOracle;
         bool disabled;
         bool isReproveWhitelisted;
-        uint256 sWagmeTaxRate; // In Bps
+        uint256 sFrgTaxRate; // In Bps
     }
 
     struct Vesting {
@@ -33,7 +33,7 @@ contract King {
 
     address public crown;
     FUSD public fusd;
-    address public sWagmeKingdom;
+    address public sFrgKingdom;
 
     address[] public reserveAddresses;
     address[] public reserveReproveWhitelistAddresses; // Array of whitelisted reserve accepted in reprove()
@@ -52,7 +52,7 @@ contract King {
         address reserveOracle,
         bool disabled,
         bool isReproveWhitelisted, // If this reserve can be used by users to reprove()
-        uint256 sWagmeTaxRate
+        uint256 sFrgTaxRate
     );
     event Praise(address indexed reserve, address indexed to, uint256 amount, Vesting vesting);
     event Reprove(address indexed reserve, address indexed from, uint256 amount);
@@ -72,10 +72,10 @@ contract King {
         _;
     }
 
-    constructor(address _fusd, address _sWagmeKingdom) {
+    constructor(address _fusd, address _sFrgKingdom) {
         crown = msg.sender;
         fusd = FUSD(_fusd);
-        sWagmeKingdom = _sWagmeKingdom;
+        sFrgKingdom = _sFrgKingdom;
     }
 
     /// @notice Returns the total number of reserves
@@ -94,7 +94,7 @@ contract King {
     /// @dev We inline assign each state to save gas instead of using Struct constructor
     /// @param _reserve the address of the asset to be used (ERC20 compliant)
     /// @param _mintingInterestRate The interest rate to be vested at mint
-    /// @param _burningTaxRate The Burning tax rate that will go to sWagme holders
+    /// @param _burningTaxRate The Burning tax rate that will go to sFrg holders
     /// @param _vestingPeriod The period where the interests will unlock
     /// @param _reserveOracle The oracle that is used for the exchange rate
     /// @param _disabled Controls the ability to be able to mint or not with the given asset
@@ -106,7 +106,7 @@ contract King {
         address _reserveOracle,
         bool _disabled,
         bool _isReproveWhitelisted,
-        uint256 _sWagmeTaxRate
+        uint256 _sFrgTaxRate
     ) external onlyCrown {
         require(_reserveOracle != address(0), 'King: Invalid oracle');
 
@@ -120,7 +120,7 @@ contract King {
         reserve.reserveOracle = IReserveOracle(_reserveOracle);
         reserve.disabled = _disabled;
         reserve.isReproveWhitelisted = _isReproveWhitelisted;
-        reserve.sWagmeTaxRate = _sWagmeTaxRate;
+        reserve.sFrgTaxRate = _sFrgTaxRate;
 
         if (!doesReserveExists(_reserve)) {
             reserveAddresses.push(_reserve);
@@ -136,7 +136,7 @@ contract King {
             _reserveOracle,
             _disabled,
             _isReproveWhitelisted,
-            _sWagmeTaxRate
+            _sFrgTaxRate
         );
     }
 
@@ -174,19 +174,19 @@ contract King {
         return totalMinted;
     }
 
-    /// @notice Burn $FUSD in exchange of the desired reserve. A certain amount could be taxed and sent to sWagme
+    /// @notice Burn $FUSD in exchange of the desired reserve. A certain amount could be taxed and sent to sFrg
     /// @param _reserve The reserve to exchange with
     /// @param _amount The amount of $FUSD to reprove
     /// @return toExchange The amount of chosen reserve exchanged
     function reprove(address _reserve, uint256 _amount) external reserveExists(_reserve) returns (uint256 toExchange) {
         Reserve storage reserve = reserves[_reserve];
         require(reserve.isReproveWhitelisted, 'King: reserve not whitelisted for reproval');
-        uint256 sWagmeTax = (_amount * reserve.sWagmeTaxRate) / 10000;
-        toExchange = IReserveOracle(reserve.reserveOracle).getExchangeRate(_amount - sWagmeTax);
+        uint256 sFrgTax = (_amount * reserve.sFrgTaxRate) / 10000;
+        toExchange = IReserveOracle(reserve.reserveOracle).getExchangeRate(_amount - sFrgTax);
 
         // Send to WAGME
-        fusd.burnFrom(msg.sender, _amount - sWagmeTax);
-        fusd.transferFrom(msg.sender, sWagmeKingdom, sWagmeTax);
+        fusd.burnFrom(msg.sender, _amount - sFrgTax);
+        fusd.transferFrom(msg.sender, sFrgKingdom, sFrgTax);
 
         // Send underlyings to sender
         IERC20(_reserve).transfer(msg.sender, toExchange);
@@ -371,10 +371,10 @@ contract King {
         assetWithdrawn = withdrawFreeReserve(_reserve, _to, freeReserves[_reserve]);
     }
 
-    /// @notice Update the sWagmeKingdom address
-    /// @param _sWagmeKingdom The new address
-    function updateSWagmeKingdom(address _sWagmeKingdom) external onlyCrown {
-        sWagmeKingdom = _sWagmeKingdom;
+    /// @notice Update the sFrgKingdom address
+    /// @param _sFrgKingdom The new address
+    function updateSFrgKingdom(address _sFrgKingdom) external onlyCrown {
+        sFrgKingdom = _sFrgKingdom;
     }
 
     /// @notice Update the owner

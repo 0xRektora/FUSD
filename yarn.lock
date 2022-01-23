@@ -9647,7 +9647,7 @@
     "resolve" "^1.8.1"
     "ts-essentials" "^1.0.0"
 
-"ts-node@^10.2.1":
+"ts-node@^10.4.0":
   "integrity" "sha512-g0FlPvvCXSIO1JDF6S232P5jPYqBkRL9qly81ZgAOSU7rwI0stphCgd2kLiCrU9DjQCrJMWEqcNSjQL02s6d8A=="
   "resolved" "https://registry.npmjs.org/ts-node/-/ts-node-10.4.0.tgz"
   "version" "10.4.0"
