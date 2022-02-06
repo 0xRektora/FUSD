@@ -14,7 +14,7 @@ async function main() {
   const DAIOracle = await deployments.get('KingReserveDAIOracle');
   const USDTOracle = await deployments.get('KingReserveUSDTOracle');
 
-  const king = await hre.ethers.getContractAt('King', (await deployments.get('King')).address);
+  const king = await hre.ethers.getContractAt('King', '0xF531FfF3BDF241Bd361C8531882faEFeDd594f26');
   const sFrg = '0x7Ea6E87789C40084030b2289C89fdA723Bd91117'; // Takes 10% burning tax
   await (await king.updateSFrgKingdom(sFrg)).wait();
 
