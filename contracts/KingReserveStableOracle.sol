@@ -9,7 +9,7 @@ interface IOracle {
 }
 
 contract KingReserveStableOracle {
-    IOracle immutable oracle;
+    IOracle public immutable oracle;
 
     constructor(address _oracle) {
         oracle = IOracle(_oracle);
@@ -27,6 +27,7 @@ contract KingReserveStableOracle {
             exchanged = exchanged * 10**(18 - decimals);
         }
 
-        return (latestAnswer * exchanged) / 10e18;
+        // We multiply by amount at last, we lose precision but prevent overflow
+        return ((latestAnswer * exchanged) / (1e18 * (10**(decimals - 1)))) * amount;
     }
 }
